@@ -167,7 +167,7 @@ Var
 BEGIN
  If(ParamStr(1)='/?')or(ParamStr(1)='--help')or(ParamStr(1)='-h')or
    (ParamStr(1)='/h')or(ParamStr(1)='/H')Then Begin
-  WriteLn('CONSTANT : Cette commande permet une constante physique');
+  WriteLn('CONSTANT : Cette commande permet de retourner une constante physique');
   WriteLn;
   WriteLn('Syntaxe : CONSTANT [parametres]');
   WriteLn;
