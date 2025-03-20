@@ -14,6 +14,10 @@ Voici la liste des différents fichiers proposés dans PhysiQ :
 		<td><b>CONSTANT.PAS</b></td>
 		<td>Cette commande permet de retourner une constante physique.</td>
 	</tr>
+	<tr>
+		<td><b>EMC2.PAS</b></td>
+		<td>Cette commande permet de calculer l'énergie avec l'équation E = mc^2 d'Albert Einstein.</td>
+	</tr>
 	</table>
 
 <h2>Compilation</h2>
