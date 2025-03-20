@@ -16,7 +16,7 @@ Voici la liste des différents fichiers proposés dans PhysiQ :
 	</tr>
 	<tr>
 		<td><b>EMC2.PAS</b></td>
-		<td>Cette commande permet de calculer l'énergie avec l'équation E = mc^2 d'Albert Einstein.</td>
+		<td>Cette commande permet de calculer l'énergie avec l'équation E = mc<sup>2</sup> d'Albert Einstein.</td>
 	</tr>
 	</table>
 
