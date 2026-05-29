@@ -4371,7 +4371,7 @@ Var
  InitialCfgFile: String;
 
 Procedure ShowCmdLineHelp;Begin
- WriteLn('GEANT4 - Cettte commadne permet de lancer un clone ',
+ WriteLn('GEANT4 - Cette commande permet de lancer un clone ',
           'pedagogique du simulateur Geant4.');
  WriteLn;
  WriteLn('Syntaxe :');
