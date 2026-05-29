@@ -982,6 +982,7 @@ Begin
     $20: OpenMenuByIdx(5); { Alt+D : formuleS (D non standard, mais)}
     $23: OpenMenuByIdx(5); { Alt+H ? -> Formules via H }
     $17: OpenMenuByIdx(6); { Alt+I : aIde }
+    $2D: QuitRequested := True; { Alt+X : Quitter }
    End;
   End;
  End
@@ -2753,7 +2754,7 @@ Begin
  AddMenuItem(MainMenuBar.Menus[0], 'Sauver resultats...', '',
              TAG_FILE_SAVERES);
  AddMenuSeparator(MainMenuBar.Menus[0]);
- AddMenuItem(MainMenuBar.Menus[0], 'Exporter image (BGI)', '',
+ AddMenuItem(MainMenuBar.Menus[0], 'Exporter image (BMP)', '',
              TAG_FILE_EXPORT);
  AddMenuSeparator(MainMenuBar.Menus[0]);
  AddMenuItem(MainMenuBar.Menus[0], 'Quitter', 'Alt+X',
@@ -2894,6 +2895,362 @@ Begin
  End;
 End;
 
+{ ----- Chargement d un fichier de configuration -----
+  Format texte simple : KEY=VAL, # ou ; pour commentaire.
+  Cles reconnues :
+    BeamKind   = electron|photon|proton|alpha
+    BeamEnergy = <MeV>
+    BeamCount  = <N>
+    BeamAngle  = <deg>
+    GeomShape  = box|cylinder|sphere
+    GeomCX,GeomCY,GeomCZ,GeomSX,GeomSY,GeomSZ = <cm>
+    Material   = <nom> (parmi Materials[].Name)
+    SimSpeed   = 1..10                                          }
+
+Function LowerStr(S: String): String;
+Var I: Integer;
+Begin
+ For I := 1 To Length(S) Do
+  If (S[I] >= 'A') And (S[I] <= 'Z') Then S[I] := Chr(Ord(S[I]) + 32);
+ LowerStr := S;
+End;
+
+Procedure TrimStr(Var S: String);
+Begin
+ While (Length(S) > 0) And ((S[1] = ' ') Or (S[1] = #9)) Do Delete(S, 1, 1);
+ While (Length(S) > 0) And ((S[Length(S)] = ' ') Or (S[Length(S)] = #9)
+   Or (S[Length(S)] = #13)) Do Dec(S[0]);
+End;
+
+Procedure LoadConfigFile(FName: String);
+Var
+ F: Text;
+ Line, Key, Val: String;
+ P, I, IVal, Loaded, Unknown: Integer;
+ IoR: Integer;
+Begin
+ Assign(F, FName);
+{$I-} Reset(F); {$I+}
+ IoR := IOResult;
+ If IoR <> 0 Then Begin
+  MessageBox('Erreur',
+   ['Impossible d ouvrir le fichier :',
+    FName,
+    'Code IO=' + IntToStr(IoR)]);
+  Exit;
+ End;
+ Loaded := 0;
+ Unknown := 0;
+ While Not Eof(F) Do Begin
+  Readln(F, Line);
+  TrimStr(Line);
+  If Length(Line) = 0 Then Continue;
+  If (Line[1] = '#') Or (Line[1] = ';') Then Continue;
+  P := Pos('=', Line);
+  If P <= 1 Then Continue;
+  Key := LowerStr(Copy(Line, 1, P - 1));
+  Val := Copy(Line, P + 1, Length(Line) - P);
+  TrimStr(Key);
+  TrimStr(Val);
+
+  If Key = 'beamkind' Then Begin
+   Val := LowerStr(Val);
+   If Val = 'electron' Then BeamKind := pkElectron
+   Else If Val = 'photon' Then BeamKind := pkPhoton
+   Else If Val = 'proton' Then BeamKind := pkProton
+   Else If Val = 'alpha' Then BeamKind := pkAlpha;
+   Inc(Loaded);
+  End
+  Else If Key = 'beamenergy' Then Begin
+   BeamEnergy := StrToRealDef(Val, BeamEnergy); Inc(Loaded);
+  End
+  Else If Key = 'beamcount' Then Begin
+   IVal := StrToIntDef(Val, BeamCount);
+   If IVal < 1 Then IVal := 1;
+   If IVal > MAX_PARTICLES Then IVal := MAX_PARTICLES;
+   BeamCount := IVal; Inc(Loaded);
+  End
+  Else If Key = 'beamangle' Then Begin
+   BeamAngleDeg := StrToRealDef(Val, BeamAngleDeg); Inc(Loaded);
+  End
+  Else If Key = 'geomshape' Then Begin
+   Val := LowerStr(Val);
+   If (Val = 'box') Or (Val = 'boite') Then Geom.Shape := gsBox
+   Else If (Val = 'cylinder') Or (Val = 'cylindre') Then Geom.Shape := gsCylinder
+   Else If (Val = 'sphere') Then Geom.Shape := gsSphere;
+   Inc(Loaded);
+  End
+  Else If Key = 'geomcx' Then Begin Geom.CX := StrToRealDef(Val, Geom.CX); Inc(Loaded); End
+  Else If Key = 'geomcy' Then Begin Geom.CY := StrToRealDef(Val, Geom.CY); Inc(Loaded); End
+  Else If Key = 'geomcz' Then Begin Geom.CZ := StrToRealDef(Val, Geom.CZ); Inc(Loaded); End
+  Else If Key = 'geomsx' Then Begin Geom.SX := StrToRealDef(Val, Geom.SX); Inc(Loaded); End
+  Else If Key = 'geomsy' Then Begin Geom.SY := StrToRealDef(Val, Geom.SY); Inc(Loaded); End
+  Else If Key = 'geomsz' Then Begin Geom.SZ := StrToRealDef(Val, Geom.SZ); Inc(Loaded); End
+  Else If Key = 'material' Then Begin
+   Val := LowerStr(Val);
+   For I := 0 To NMaterials - 1 Do
+    If LowerStr(Materials[I].Name) = Val Then Begin
+     Geom.MatIdx := I; Break;
+    End;
+   Inc(Loaded);
+  End
+  Else If Key = 'simspeed' Then Begin
+   IVal := StrToIntDef(Val, SimSpeed);
+   If IVal < 1 Then IVal := 1;
+   If IVal > 10 Then IVal := 10;
+   SimSpeed := IVal; Inc(Loaded);
+  End
+  Else
+   Inc(Unknown);
+ End;
+ Close(F);
+ ResetSimulation;
+ FullRepaint := True;
+ MessageBox('Configuration chargee',
+  ['Fichier : ' + FName,
+   IntToStr(Loaded) + ' parametre(s) appliques.',
+   IntToStr(Unknown) + ' cle(s) inconnue(s) ignoree(s).']);
+End;
+
+Procedure DoLoadConfig;
+Var FName: String;
+Begin
+ FName := 'GEANT4.CFG';
+ If InputBoxStr('Charger configuration',
+    'Nom du fichier (texte KEY=VAL) :', FName, 60) Then
+  If Length(FName) > 0 Then LoadConfigFile(FName);
+End;
+
+{ ----- Sauvegarde du rapport de simulation ----- }
+
+Function KindToStr(K: TParticleKind): String;
+Begin
+ Case K Of
+  pkElectron: KindToStr := 'electron';
+  pkPhoton:   KindToStr := 'photon';
+  pkProton:   KindToStr := 'proton';
+  pkAlpha:    KindToStr := 'alpha';
+ Else         KindToStr := '?';
+ End;
+End;
+
+Function ShapeToStr(S: TGeoShape): String;
+Begin
+ Case S Of
+  gsBox:      ShapeToStr := 'box';
+  gsCylinder: ShapeToStr := 'cylinder';
+  gsSphere:   ShapeToStr := 'sphere';
+ Else         ShapeToStr := '?';
+ End;
+End;
+
+Procedure SaveResultsFile(FName: String);
+Var
+ F: Text;
+ I: Integer;
+ NAlive, NStopped: Integer;
+ ETot, XMin, XMax, BinW, Xc: Real;
+ IoR: Integer;
+Begin
+ Assign(F, FName);
+{$I-} Rewrite(F); {$I+}
+ IoR := IOResult;
+ If IoR <> 0 Then Begin
+  MessageBox('Erreur',
+   ['Impossible d ecrire le fichier :',
+    FName,
+    'Code IO=' + IntToStr(IoR)]);
+  Exit;
+ End;
+
+ Writeln(F, '# GEANT4 demo - rapport de simulation');
+ Writeln(F, '# Format texte. Sections : [Beam] [Geometry] [Stats] [Particles] [Histogram]');
+ Writeln(F);
+
+ Writeln(F, '[Beam]');
+ Writeln(F, 'Kind     = ', KindToStr(BeamKind));
+ Writeln(F, 'Energy   = ', RealToStr(BeamEnergy, 1, 4), ' MeV');
+ Writeln(F, 'Count    = ', BeamCount);
+ Writeln(F, 'Angle    = ', RealToStr(BeamAngleDeg, 1, 3), ' deg');
+ Writeln(F);
+
+ Writeln(F, '[Geometry]');
+ Writeln(F, 'Shape    = ', ShapeToStr(Geom.Shape));
+ Writeln(F, 'Center   = (', RealToStr(Geom.CX, 1, 3), ', ',
+                            RealToStr(Geom.CY, 1, 3), ', ',
+                            RealToStr(Geom.CZ, 1, 3), ') cm');
+ Writeln(F, 'HalfSize = (', RealToStr(Geom.SX, 1, 3), ', ',
+                            RealToStr(Geom.SY, 1, 3), ', ',
+                            RealToStr(Geom.SZ, 1, 3), ') cm');
+ If (Geom.MatIdx >= 0) And (Geom.MatIdx < NMaterials) Then
+  Writeln(F, 'Material = ', Materials[Geom.MatIdx].Name,
+          ' (Z=', Materials[Geom.MatIdx].Z:0:0,
+          ', rho=', RealToStr(Materials[Geom.MatIdx].Density, 1, 4), ' g/cm3)')
+ Else
+  Writeln(F, 'Material = (none)');
+ Writeln(F);
+
+ NAlive := 0; NStopped := 0; ETot := 0;
+ For I := 1 To NParticles Do Begin
+  If Particles[I].Alive Then Inc(NAlive) Else Inc(NStopped);
+  ETot := ETot + Particles[I].Energy;
+ End;
+
+ Writeln(F, '[Stats]');
+ Writeln(F, 'SimStep    = ', SimStep);
+ Writeln(F, 'NParticles = ', NParticles);
+ Writeln(F, 'NAlive     = ', NAlive);
+ Writeln(F, 'NStopped   = ', NStopped);
+ Writeln(F, 'EnergyRemaining = ', RealToStr(ETot, 1, 4), ' MeV');
+ Writeln(F);
+
+ Writeln(F, '[Particles]');
+ Writeln(F, '# idx kind energy_MeV alive trackLen X Y Z');
+ For I := 1 To NParticles Do Begin
+  Write(F, I:4, ' ', KindToStr(Particles[I].Kind):10, ' ',
+           RealToStr(Particles[I].Energy, 1, 4):10, ' ');
+  If Particles[I].Alive Then Write(F, 'alive   ')
+  Else Write(F, 'stopped ');
+  Writeln(F, Particles[I].TrackLen:4, ' ',
+              RealToStr(Particles[I].X, 1, 3), ' ',
+              RealToStr(Particles[I].Y, 1, 3), ' ',
+              RealToStr(Particles[I].Z, 1, 3));
+ End;
+ Writeln(F);
+
+ Writeln(F, '[Histogram]');
+ Writeln(F, '# bin x_cm dE_MeV');
+ XMin := Geom.CX - Geom.SX;
+ XMax := Geom.CX + Geom.SX;
+ If NHistBins > 0 Then BinW := (XMax - XMin) / NHistBins Else BinW := 0;
+ For I := 0 To NHistBins - 1 Do Begin
+  Xc := XMin + (I + 0.5) * BinW;
+  Writeln(F, I:4, ' ', RealToStr(Xc, 1, 3):10, ' ',
+                       RealToStr(Hist[I], 1, 6));
+ End;
+
+ Close(F);
+ MessageBox('Resultats sauvegardes',
+  ['Fichier : ' + FName,
+   IntToStr(NParticles) + ' particule(s) ecrites.',
+   IntToStr(NHistBins) + ' bin(s) d histogramme.']);
+End;
+
+Procedure DoSaveResults;
+Var FName: String;
+Begin
+ FName := 'GEANT4.OUT';
+ If InputBoxStr('Sauver resultats',
+    'Nom du fichier de sortie :', FName, 60) Then
+  If Length(FName) > 0 Then SaveResultsFile(FName);
+End;
+
+{ ----- Export image BMP 24 bits (capture ecran) -----
+  Lit l ecran via GetPixel et ecrit un BMP non compresse,
+  bottom-up, 24 bpp, sans palette. Utilise la palette VGA
+  16 couleurs standard pour traduire les indices.            }
+
+Procedure SaveScreenBMP(FName: String);
+Const
+ PaletteR : Array[0..15] Of Byte =
+   (  0,   0,   0,   0, 170, 170, 170, 170,
+     85,  85,  85,  85, 255, 255, 255, 255);
+ PaletteG : Array[0..15] Of Byte =
+   (  0,   0, 170, 170,   0,   0,  85, 170,
+     85,  85, 255, 255,  85,  85, 255, 255);
+ PaletteB : Array[0..15] Of Byte =
+   (  0, 170,   0, 170,   0, 170,   0, 170,
+     85, 255,  85, 255,  85, 255,  85, 255);
+Var
+ F: File;
+ Hdr: Array[0..53] Of Byte;
+ Row: Array[0..SCREEN_W * 3 - 1] Of Byte;
+ W, H, X, Y, Px, RowBytes, Pad, I: Integer;
+ ImgSize, FileSz: LongInt;
+ BW: LongInt;
+ IoR: Integer;
+ PadByte: Byte;
+
+ Procedure PutW(P: Integer; V: Word);
+ Begin
+  Hdr[P]     := Byte(V And $FF);
+  Hdr[P + 1] := Byte((V Shr 8) And $FF);
+ End;
+
+ Procedure PutL(P: Integer; V: LongInt);
+ Begin
+  Hdr[P]     := Byte(V And $FF);
+  Hdr[P + 1] := Byte((V Shr 8) And $FF);
+  Hdr[P + 2] := Byte((V Shr 16) And $FF);
+  Hdr[P + 3] := Byte((V Shr 24) And $FF);
+ End;
+
+Begin
+ W := GetScreenWidth;
+ H := GetScreenHeight;
+ If W > SCREEN_W Then W := SCREEN_W;
+ RowBytes := W * 3;
+ Pad := (4 - (RowBytes And 3)) And 3;
+ ImgSize := LongInt(RowBytes + Pad) * H;
+ FileSz  := 54 + ImgSize;
+
+ Assign(F, FName);
+{$I-} Rewrite(F, 1); {$I+}
+ IoR := IOResult;
+ If IoR <> 0 Then Begin
+  MessageBox('Erreur',
+   ['Impossible d ecrire le fichier :', FName,
+    'Code IO=' + IntToStr(IoR)]);
+  Exit;
+ End;
+
+ FillChar(Hdr, SizeOf(Hdr), 0);
+ { BITMAPFILEHEADER }
+ Hdr[0] := Ord('B'); Hdr[1] := Ord('M');
+ PutL(2,  FileSz);
+ PutL(10, 54);
+ { BITMAPINFOHEADER }
+ PutL(14, 40);
+ PutL(18, W);
+ PutL(22, H);
+ PutW(26, 1);
+ PutW(28, 24);
+ PutL(30, 0);          { compression = BI_RGB }
+ PutL(34, ImgSize);
+ PutL(38, 2835);       { 72 dpi en pixels/metre }
+ PutL(42, 2835);
+ PutL(46, 0);
+ PutL(50, 0);
+ BlockWrite(F, Hdr, 54, BW);
+
+ PadByte := 0;
+ For Y := H - 1 DownTo 0 Do Begin
+  For X := 0 To W - 1 Do Begin
+   Px := GetPixel(X, Y) And 15;
+   Row[X * 3]     := PaletteB[Px];
+   Row[X * 3 + 1] := PaletteG[Px];
+   Row[X * 3 + 2] := PaletteR[Px];
+  End;
+  BlockWrite(F, Row, RowBytes, BW);
+  For I := 1 To Pad Do BlockWrite(F, PadByte, 1, BW);
+ End;
+
+ Close(F);
+ MessageBox('Image sauvegardee',
+  ['Fichier : ' + FName,
+   IntToStr(W) + ' x ' + IntToStr(H) + ' pixels',
+   '24 bits par pixel (BMP non compresse)']);
+End;
+
+Procedure DoExportImage;
+Var FName: String;
+Begin
+ FName := 'GEANT4.BMP';
+ If InputBoxStr('Exporter image',
+    'Nom du fichier BMP :', FName, 60) Then
+  If Length(FName) > 0 Then SaveScreenBMP(FName);
+End;
+
 Procedure ExecuteMenuItem(Var Item: TMenuItem);
 Var Cat: Integer;
 Begin
@@ -2905,10 +3262,9 @@ Begin
    FullRepaint := True;
   End;
   TAG_FILE_QUIT: QuitRequested := True;
-  TAG_FILE_LOADCFG, TAG_FILE_SAVERES, TAG_FILE_EXPORT:
-   MessageBox('Information',
-    ['Fonctionnalite a venir.',
-     'Cette version est une demo interactive.']);
+  TAG_FILE_LOADCFG: DoLoadConfig;
+  TAG_FILE_SAVERES: DoSaveResults;
+  TAG_FILE_EXPORT:  DoExportImage;
 
   TAG_SIM_START: Begin
    If NParticles = 0 Then SpawnBeam;
