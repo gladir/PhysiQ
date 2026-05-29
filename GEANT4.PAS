@@ -3183,6 +3183,637 @@ Begin
    Or (S[Length(S)] = #13)) Do Dec(S[0]);
 End;
 
+{ ============================================================
+  BOITE D OUVERTURE / SAUVEGARDE DE FICHIERS
+  Style Turbo Vision / Windows : navigation des repertoires,
+  liste des fichiers, champ nom, filtre de type, choix du
+  lecteur, OK / Annuler ; entierement manipulable a la souris
+  ou au clavier.
+  ============================================================ }
+
+Const
+ MAX_FD_ENTRIES = 512;
+
+Type
+ TFileFilter = Record
+  Desc : String[40];
+  Mask : String[20];
+ End;
+ TFileFiltersArr = Array[0..7] Of TFileFilter;
+
+ TFileEntry = Record
+  Name  : String[40];
+  Size  : LongInt;
+  IsDir : Boolean;
+  IsUp  : Boolean;
+  IsDrv : Boolean;
+  DrvLt : Char;
+ End;
+
+Function FdUpStr(S: String): String;
+Var I: Integer;
+Begin
+ For I := 1 To Length(S) Do S[I] := UpCase(S[I]);
+ FdUpStr := S;
+End;
+
+Function FdEntryLess(Var A, B: TFileEntry): Boolean;
+Var R: Boolean;
+Begin
+ R := False;
+ If A.IsUp And Not B.IsUp Then R := True
+ Else If B.IsUp And Not A.IsUp Then R := False
+ Else If A.IsDrv And Not B.IsDrv Then R := False
+ Else If B.IsDrv And Not A.IsDrv Then R := True
+ Else If A.IsDir And Not B.IsDir Then R := True
+ Else If B.IsDir And Not A.IsDir Then R := False
+ Else R := FdUpStr(A.Name) < FdUpStr(B.Name);
+ FdEntryLess := R;
+End;
+
+Function FdDriveExists(L: Char): Boolean;
+Var S: String; IoR: Integer; OK: Boolean;
+Begin
+ {$I-} GetDir(Ord(UpCase(L)) - Ord('A') + 1, S); {$I+}
+ IoR := IOResult;
+ OK := (IoR = 0) And (Length(S) > 0);
+ FdDriveExists := OK;
+End;
+
+Function FdFileExists(FN: String): Boolean;
+Var F: File; IoR: Integer; OK: Boolean;
+Begin
+ Assign(F, FN);
+ {$I-} Reset(F, 1); {$I+}
+ IoR := IOResult;
+ OK := (IoR = 0);
+ If OK Then Close(F);
+ FdFileExists := OK;
+End;
+
+Function FileOpenDialog(Title: String; Var FName: String;
+                        Var Filters: TFileFiltersArr;
+                        NFilters: Integer;
+                        SaveMode: Boolean): Boolean;
+Const
+ ROW_H = 12;
+ FD_MAXNAME = 60;
+Var
+ X1, Y1, X2, Y2: Integer;
+ BufSize: LongInt;
+ BgBuf: Pointer;
+ CurPath: String;
+ EditBuf: String;
+ FilterIdx: Integer;
+ Sel, TopIdx: Integer;
+ Entries: Array[0..MAX_FD_ENTRIES - 1] Of TFileEntry;
+ NEntries: Integer;
+ EditX1, EditY1, EditX2, EditY2: Integer;
+ FltX1, FltY1, FltX2, FltY2: Integer;
+ FltLeftX1, FltLeftX2: Integer;
+ FltRightX1, FltRightX2: Integer;
+ ListX1, ListY1, ListX2, ListY2: Integer;
+ SbX1, SbX2: Integer;
+ SbUpY1, SbUpY2: Integer;
+ SbDnY1, SbDnY2: Integer;
+ Btns: TDlgButtons;
+ Ev: TEvent;
+ Hit, IRow, NewSel: Integer;
+ Done, Result_: Boolean;
+ Focus: Integer;
+ Caret: Boolean;
+ LastBlink, NowTs: LongInt;
+ NVisible: Integer;
+ OkCaption: String;
+
+ Procedure RescanDir;
+ Var
+  SR: SearchRec;
+  M: String;
+  P, Q: Integer;
+  Tmp: TFileEntry;
+  HasParent: Boolean;
+  DL: Char;
+ Begin
+  NEntries := 0;
+  GetDir(0, CurPath);
+  HasParent := Length(CurPath) > 3;
+  {$I-} FindFirst('*.*', Directory, SR); {$I+}
+  While (DosError = 0) And (NEntries < MAX_FD_ENTRIES) Do Begin
+   If ((SR.Attr And Directory) <> 0) And
+      (SR.Name <> '.') And (SR.Name <> '..') Then Begin
+    Entries[NEntries].Name := SR.Name;
+    Entries[NEntries].Size := 0;
+    Entries[NEntries].IsDir := True;
+    Entries[NEntries].IsUp := False;
+    Entries[NEntries].IsDrv := False;
+    Entries[NEntries].DrvLt := ' ';
+    Inc(NEntries);
+   End;
+   FindNext(SR);
+  End;
+  {$IFDEF FPC} FindClose(SR); {$ENDIF}
+  If (FilterIdx >= 0) And (FilterIdx < NFilters) Then
+   M := Filters[FilterIdx].Mask
+  Else
+   M := '*.*';
+  {$I-} FindFirst(M, AnyFile, SR); {$I+}
+  While (DosError = 0) And (NEntries < MAX_FD_ENTRIES) Do Begin
+   If ((SR.Attr And Directory) = 0) And
+      ((SR.Attr And VolumeID) = 0) Then Begin
+    Entries[NEntries].Name := SR.Name;
+    Entries[NEntries].Size := SR.Size;
+    Entries[NEntries].IsDir := False;
+    Entries[NEntries].IsUp := False;
+    Entries[NEntries].IsDrv := False;
+    Entries[NEntries].DrvLt := ' ';
+    Inc(NEntries);
+   End;
+   FindNext(SR);
+  End;
+  {$IFDEF FPC} FindClose(SR); {$ENDIF}
+  For P := 0 To NEntries - 2 Do
+   For Q := 0 To NEntries - 2 - P Do
+    If FdEntryLess(Entries[Q + 1], Entries[Q]) Then Begin
+     Tmp := Entries[Q];
+     Entries[Q] := Entries[Q + 1];
+     Entries[Q + 1] := Tmp;
+    End;
+  If HasParent And (NEntries < MAX_FD_ENTRIES) Then Begin
+   For P := NEntries Downto 1 Do Entries[P] := Entries[P - 1];
+   Entries[0].Name := '..';
+   Entries[0].Size := 0;
+   Entries[0].IsDir := True;
+   Entries[0].IsUp := True;
+   Entries[0].IsDrv := False;
+   Entries[0].DrvLt := ' ';
+   Inc(NEntries);
+  End;
+  For DL := 'A' To 'Z' Do
+   If FdDriveExists(DL) And (NEntries < MAX_FD_ENTRIES) Then Begin
+    Entries[NEntries].Name := '[-' + DL + '-]';
+    Entries[NEntries].Size := 0;
+    Entries[NEntries].IsDir := False;
+    Entries[NEntries].IsUp := False;
+    Entries[NEntries].IsDrv := True;
+    Entries[NEntries].DrvLt := DL;
+    Inc(NEntries);
+   End;
+  Sel := 0; TopIdx := 0;
+ End;
+
+ Procedure DrawPath;
+ Var S: String;
+ Begin
+  SetFillStyle(SolidFill, CLR_BACKGROUND);
+  Bar(X1 + 6, Y1 + 22, X2 - 6, Y1 + 38);
+  SetColor(Black);
+  S := CurPath;
+  If Length(S) > 60 Then S := Copy(S, 1, 28) + '...' + Copy(S, Length(S) - 28, 29);
+  OutTextXY(X1 + 12, Y1 + 26, 'Repertoire: ' + S);
+ End;
+
+ Procedure DrawEdit;
+ Var DispBuf: String;
+ Begin
+  SetColor(Black);
+  OutTextXY(X1 + 12, EditY1 + 4, 'Nom:');
+  SetFillStyle(SolidFill, White);
+  Bar(EditX1, EditY1, EditX2, EditY2);
+  SetColor(CLR_BORDER);
+  Rectangle(EditX1 - 1, EditY1 - 1, EditX2 + 1, EditY2 + 1);
+  DispBuf := EditBuf;
+  While Length(DispBuf) * 8 > (EditX2 - EditX1 - 6) Do Delete(DispBuf, 1, 1);
+  SetColor(Black);
+  OutTextXY(EditX1 + 3, EditY1 + 4, DispBuf);
+  If (Focus = 0) And Caret Then Begin
+   Line(EditX1 + 3 + Length(DispBuf) * 8, EditY1 + 3,
+        EditX1 + 3 + Length(DispBuf) * 8, EditY1 + 14);
+  End;
+ End;
+
+ Procedure DrawFilter;
+ Var S: String;
+ Begin
+  SetColor(Black);
+  OutTextXY(X1 + 12, FltY1 + 4, 'Type:');
+  SetFillStyle(SolidFill, White);
+  Bar(FltX1, FltY1, FltX2, FltY2);
+  SetColor(CLR_BORDER);
+  Rectangle(FltX1 - 1, FltY1 - 1, FltX2 + 1, FltY2 + 1);
+  If (FilterIdx >= 0) And (FilterIdx < NFilters) Then
+   S := Filters[FilterIdx].Desc + '  (' + Filters[FilterIdx].Mask + ')'
+  Else
+   S := '(aucun filtre)';
+  SetColor(Black);
+  OutTextXY(FltX1 + 4, FltY1 + 4, S);
+  SetFillStyle(SolidFill, LightGray);
+  Bar(FltLeftX1, FltY1, FltLeftX2, FltY2);
+  SetColor(CLR_BORDER); Rectangle(FltLeftX1, FltY1, FltLeftX2, FltY2);
+  SetColor(Black); OutTextXY(FltLeftX1 + 4, FltY1 + 4, #17);
+  SetFillStyle(SolidFill, LightGray);
+  Bar(FltRightX1, FltY1, FltRightX2, FltY2);
+  SetColor(CLR_BORDER); Rectangle(FltRightX1, FltY1, FltRightX2, FltY2);
+  SetColor(Black); OutTextXY(FltRightX1 + 4, FltY1 + 4, #16);
+ End;
+
+ Procedure DrawListItem(IdxRel: Integer);
+ Var
+  AbsIdx, Y, BC, TC: Integer;
+  E: TFileEntry;
+  S, Sz: String;
+ Begin
+  AbsIdx := TopIdx + IdxRel;
+  Y := ListY1 + 2 + IdxRel * ROW_H;
+  SetFillStyle(SolidFill, White);
+  Bar(ListX1 + 1, Y, ListX2 - 1, Y + ROW_H - 1);
+  If AbsIdx >= NEntries Then Exit;
+  E := Entries[AbsIdx];
+  If AbsIdx = Sel Then Begin
+   If Focus = 1 Then Begin BC := Blue; TC := White; End
+   Else                Begin BC := CLR_TITLEBAR; TC := White; End;
+   SetFillStyle(SolidFill, BC);
+   Bar(ListX1 + 1, Y, ListX2 - 1, Y + ROW_H - 1);
+  End Else Begin
+   If E.IsDir Or E.IsDrv Or E.IsUp Then TC := Blue Else TC := Black;
+  End;
+  If E.IsUp Then S := '[..]'
+  Else If E.IsDrv Then S := E.Name
+  Else If E.IsDir Then S := '[' + E.Name + ']'
+  Else S := E.Name;
+  SetColor(TC);
+  OutTextXY(ListX1 + 4, Y + 2, S);
+  If (Not E.IsDir) And (Not E.IsDrv) Then Begin
+   Str(E.Size, Sz);
+   OutTextXY(ListX2 - 4 - Length(Sz) * 8, Y + 2, Sz);
+  End;
+ End;
+
+ Procedure DrawList;
+ Var I: Integer;
+ Begin
+  SetFillStyle(SolidFill, White);
+  Bar(ListX1, ListY1, ListX2, ListY2);
+  SetColor(CLR_BORDER);
+  Rectangle(ListX1 - 1, ListY1 - 1, ListX2 + 1, ListY2 + 1);
+  For I := 0 To NVisible - 1 Do DrawListItem(I);
+ End;
+
+ Procedure DrawScrollbar;
+ Var ThumbY1, ThumbY2, TrackH: Integer;
+ Begin
+  SetFillStyle(SolidFill, LightGray);
+  Bar(SbX1, SbUpY1, SbX2, SbUpY2);
+  SetColor(CLR_BORDER); Rectangle(SbX1, SbUpY1, SbX2, SbUpY2);
+  SetColor(Black);
+  Line(SbX1 + 7, SbUpY1 + 4, SbX1 + 4, SbUpY1 + 8);
+  Line(SbX1 + 7, SbUpY1 + 4, SbX1 + 10, SbUpY1 + 8);
+  Line(SbX1 + 4, SbUpY1 + 8, SbX1 + 10, SbUpY1 + 8);
+  SetFillStyle(SolidFill, LightGray);
+  Bar(SbX1, SbDnY1, SbX2, SbDnY2);
+  SetColor(CLR_BORDER); Rectangle(SbX1, SbDnY1, SbX2, SbDnY2);
+  SetColor(Black);
+  Line(SbX1 + 4, SbDnY1 + 4, SbX1 + 10, SbDnY1 + 4);
+  Line(SbX1 + 4, SbDnY1 + 4, SbX1 + 7, SbDnY1 + 8);
+  Line(SbX1 + 10, SbDnY1 + 4, SbX1 + 7, SbDnY1 + 8);
+  SetFillStyle(SolidFill, DarkGray);
+  Bar(SbX1, SbUpY2 + 1, SbX2, SbDnY1 - 1);
+  TrackH := (SbDnY1 - 1) - (SbUpY2 + 1);
+  If NEntries <= NVisible Then Begin
+   ThumbY1 := SbUpY2 + 1;
+   ThumbY2 := SbDnY1 - 1;
+  End Else Begin
+   ThumbY1 := SbUpY2 + 1 +
+              (LongInt(TopIdx) * (TrackH - 14)) Div (NEntries - NVisible);
+   ThumbY2 := ThumbY1 + 14;
+   If ThumbY2 > SbDnY1 - 1 Then Begin
+    ThumbY2 := SbDnY1 - 1;
+    ThumbY1 := ThumbY2 - 14;
+   End;
+  End;
+  SetFillStyle(SolidFill, LightGray);
+  Bar(SbX1, ThumbY1, SbX2, ThumbY2);
+  SetColor(CLR_BORDER); Rectangle(SbX1, ThumbY1, SbX2, ThumbY2);
+ End;
+
+ Procedure DrawAll;
+ Begin
+  DialogBox(X1, Y1, X2, Y2, Title);
+  DrawPath;
+  DrawEdit;
+  DrawFilter;
+  DrawList;
+  DrawScrollbar;
+  DrawDlgButtons(Btns, 2);
+ End;
+
+ Procedure ScrollIntoView;
+ Begin
+  If Sel < TopIdx Then TopIdx := Sel
+  Else If Sel >= TopIdx + NVisible Then TopIdx := Sel - NVisible + 1;
+  If TopIdx < 0 Then TopIdx := 0;
+  If TopIdx > NEntries - NVisible Then TopIdx := NEntries - NVisible;
+  If TopIdx < 0 Then TopIdx := 0;
+ End;
+
+ Procedure SelectEntry(N: Integer);
+ Begin
+  If (N < 0) Or (N >= NEntries) Then Exit;
+  Sel := N;
+  ScrollIntoView;
+  If (Not Entries[Sel].IsDir) And (Not Entries[Sel].IsDrv) Then
+   EditBuf := Entries[Sel].Name;
+  DrawList;
+  DrawScrollbar;
+  DrawEdit;
+ End;
+
+ Procedure NavigateInto(IdxN: Integer);
+ Var IoR: Integer; NewPath: String;
+ Begin
+  If (IdxN < 0) Or (IdxN >= NEntries) Then Exit;
+  If Entries[IdxN].IsDrv Then Begin
+   {$I-} GetDir(Ord(Entries[IdxN].DrvLt) - Ord('A') + 1, NewPath); {$I+}
+   IoR := IOResult;
+   If IoR = 0 Then Begin
+    {$I-} ChDir(Entries[IdxN].DrvLt + ':'); {$I+} IoR := IOResult;
+    {$I-} ChDir(NewPath); {$I+} IoR := IOResult;
+   End;
+  End
+  Else If Entries[IdxN].IsUp Then Begin
+   {$I-} ChDir('..'); {$I+} IoR := IOResult;
+  End
+  Else If Entries[IdxN].IsDir Then Begin
+   {$I-} ChDir(Entries[IdxN].Name); {$I+} IoR := IOResult;
+  End
+  Else Exit;
+  RescanDir;
+  EditBuf := '';
+  DrawAll;
+ End;
+
+ Function AcceptFilename: Boolean;
+ Var SR: SearchRec; IoR: Integer; OK: Boolean; Tmp: String;
+ Begin
+  OK := False;
+  Tmp := EditBuf;
+  While (Length(Tmp) > 0) And (Tmp[1] = ' ') Do Delete(Tmp, 1, 1);
+  While (Length(Tmp) > 0) And (Tmp[Length(Tmp)] = ' ') Do Dec(Tmp[0]);
+  If Length(Tmp) = 0 Then Begin AcceptFilename := False; Exit; End;
+  If (Pos('*', Tmp) > 0) Or (Pos('?', Tmp) > 0) Then Begin
+   If (FilterIdx >= 0) And (FilterIdx < NFilters) Then Begin
+    Filters[FilterIdx].Mask := Tmp;
+    Filters[FilterIdx].Desc := 'Personnalise';
+   End;
+   RescanDir;
+   EditBuf := '';
+   DrawAll;
+   AcceptFilename := False; Exit;
+  End;
+  {$I-} FindFirst(Tmp, Directory, SR); {$I+}
+  IoR := DosError;
+  If (IoR = 0) And ((SR.Attr And Directory) <> 0) Then Begin
+   {$IFDEF FPC} FindClose(SR); {$ENDIF}
+   {$I-} ChDir(Tmp); {$I+} IoR := IOResult;
+   If IoR = 0 Then Begin
+    RescanDir; EditBuf := ''; DrawAll;
+   End;
+   AcceptFilename := False; Exit;
+  End;
+  {$IFDEF FPC} FindClose(SR); {$ENDIF}
+  If (Not SaveMode) And (Not FdFileExists(Tmp)) Then Begin
+   PutImage(X1, Y1, BgBuf^, NormalPut);
+   MessageBox('Erreur', ['Le fichier n existe pas :', Tmp]);
+   GetImage(X1, Y1, X2 + 4, Y2 + 4, BgBuf^);
+   DrawAll;
+   AcceptFilename := False; Exit;
+  End;
+  FName := Tmp;
+  OK := True;
+  AcceptFilename := OK;
+ End;
+
+ Function HitListRow(MX, MY: Integer): Integer;
+ Var R: Integer;
+ Begin
+  HitListRow := -1;
+  If (MX < ListX1) Or (MX > ListX2) Then Exit;
+  If (MY < ListY1) Or (MY > ListY2) Then Exit;
+  R := (MY - ListY1 - 2) Div ROW_H;
+  If (R < 0) Or (R >= NVisible) Then Exit;
+  If TopIdx + R >= NEntries Then Exit;
+  HitListRow := TopIdx + R;
+ End;
+
+Begin
+ X1 := 60; Y1 := 50; X2 := 580; Y2 := 430;
+ BufSize := ImageSize(X1, Y1, X2 + 4, Y2 + 4);
+ GetMem(BgBuf, BufSize);
+ GetImage(X1, Y1, X2 + 4, Y2 + 4, BgBuf^);
+
+ EditX1 := X1 + 60; EditY1 := Y1 + 44;
+ EditX2 := X2 - 12; EditY2 := EditY1 + 18;
+
+ FltX1 := X1 + 60; FltY1 := Y1 + 72;
+ FltX2 := X2 - 12 - 44; FltY2 := FltY1 + 18;
+ FltLeftX1  := FltX2 + 4;  FltLeftX2  := FltLeftX1 + 18;
+ FltRightX1 := FltLeftX2 + 2; FltRightX2 := FltRightX1 + 18;
+
+ ListX1 := X1 + 12; ListY1 := Y1 + 100;
+ ListX2 := X2 - 12 - 18; ListY2 := Y2 - DLG_BTN_H - 18;
+ SbX1 := ListX2 + 3; SbX2 := SbX1 + 14;
+ SbUpY1 := ListY1; SbUpY2 := ListY1 + 14;
+ SbDnY1 := ListY2 - 14; SbDnY2 := ListY2;
+ NVisible := (ListY2 - ListY1 - 4) Div ROW_H;
+
+ If SaveMode Then OkCaption := '&Enregistrer' Else OkCaption := '&Ouvrir';
+ InitDlgButton(Btns[0], OkCaption, True,  False);
+ InitDlgButton(Btns[1], 'Annuler', False, True);
+ LayoutDlgButtons(Btns, 2, X1, X2, Y2 - DLG_BTN_H - 6);
+
+ FilterIdx := 0;
+ EditBuf := FName;
+ Caret := True; LastBlink := GetTimestamp;
+ Focus := 0;
+ RescanDir;
+ DrawAll;
+
+ Result_ := False;
+ Done := False;
+ Repeat
+  PollEvents(Ev);
+  NowTs := GetTimestamp;
+  If (Focus = 0) And ((NowTs - LastBlink) > 400) Then Begin
+   Caret := Not Caret; LastBlink := NowTs; DrawEdit;
+  End;
+  If Ev.Kind = EV_NONE Then Begin Delay(15); Continue; End;
+
+  { Boutons OK / Annuler }
+  Hit := HandleDlgButtonEvent(Btns, 2, Ev);
+  If Hit = 0 Then Begin
+   If AcceptFilename Then Begin Result_ := True; Done := True; End;
+   Continue;
+  End
+  Else If Hit = 1 Then Begin Done := True; Continue; End;
+
+  { Clic souris }
+  If Ev.Kind = EV_MOUSE_DOWN Then Begin
+   IRow := HitListRow(Ev.MouseX, Ev.MouseY);
+   If IRow >= 0 Then Begin
+    Focus := 1; SelectEntry(IRow); Continue;
+   End;
+   If (Ev.MouseX >= EditX1) And (Ev.MouseX <= EditX2) And
+      (Ev.MouseY >= EditY1) And (Ev.MouseY <= EditY2) Then Begin
+    Focus := 0; DrawList; DrawEdit; Continue;
+   End;
+   If (Ev.MouseX >= FltLeftX1) And (Ev.MouseX <= FltLeftX2) And
+      (Ev.MouseY >= FltY1) And (Ev.MouseY <= FltY2) Then Begin
+    If NFilters > 0 Then Begin
+     Dec(FilterIdx);
+     If FilterIdx < 0 Then FilterIdx := NFilters - 1;
+     RescanDir; DrawFilter; DrawList; DrawScrollbar;
+    End;
+    Continue;
+   End;
+   If (Ev.MouseX >= FltRightX1) And (Ev.MouseX <= FltRightX2) And
+      (Ev.MouseY >= FltY1) And (Ev.MouseY <= FltY2) Then Begin
+    If NFilters > 0 Then Begin
+     Inc(FilterIdx);
+     If FilterIdx >= NFilters Then FilterIdx := 0;
+     RescanDir; DrawFilter; DrawList; DrawScrollbar;
+    End;
+    Continue;
+   End;
+   If (Ev.MouseX >= FltX1) And (Ev.MouseX <= FltX2) And
+      (Ev.MouseY >= FltY1) And (Ev.MouseY <= FltY2) Then Begin
+    If NFilters > 0 Then Begin
+     Inc(FilterIdx);
+     If FilterIdx >= NFilters Then FilterIdx := 0;
+     RescanDir; DrawFilter; DrawList; DrawScrollbar;
+    End;
+    Continue;
+   End;
+   If (Ev.MouseX >= SbX1) And (Ev.MouseX <= SbX2) Then Begin
+    If (Ev.MouseY >= SbUpY1) And (Ev.MouseY <= SbUpY2) Then Begin
+     If TopIdx > 0 Then Begin Dec(TopIdx); DrawList; DrawScrollbar; End;
+     Continue;
+    End;
+    If (Ev.MouseY >= SbDnY1) And (Ev.MouseY <= SbDnY2) Then Begin
+     If TopIdx < NEntries - NVisible Then Begin
+      Inc(TopIdx); DrawList; DrawScrollbar;
+     End;
+     Continue;
+    End;
+    If (Ev.MouseY > SbUpY2) And (Ev.MouseY < SbDnY1) Then Begin
+     If NEntries > NVisible Then Begin
+      TopIdx := ((LongInt(Ev.MouseY - SbUpY2 - 7)) * (NEntries - NVisible))
+                Div (SbDnY1 - SbUpY2 - 14);
+      If TopIdx < 0 Then TopIdx := 0;
+      If TopIdx > NEntries - NVisible Then TopIdx := NEntries - NVisible;
+      DrawList; DrawScrollbar;
+     End;
+     Continue;
+    End;
+   End;
+  End;
+
+  If Ev.Kind = EV_MOUSE_DBLCLICK Then Begin
+   IRow := HitListRow(Ev.MouseX, Ev.MouseY);
+   If IRow >= 0 Then Begin
+    Sel := IRow;
+    If Entries[Sel].IsDir Or Entries[Sel].IsDrv Or Entries[Sel].IsUp Then
+     NavigateInto(Sel)
+    Else Begin
+     EditBuf := Entries[Sel].Name;
+     If AcceptFilename Then Begin Result_ := True; Done := True; End;
+    End;
+    Continue;
+   End;
+  End;
+
+  { Clavier }
+  If Ev.Kind = EV_KEY_CHAR Then Begin
+   If Ev.KeyChar = #9 Then Begin
+    Focus := (Focus + 1) Mod 3;
+    DrawEdit; DrawList; DrawFilter;
+    Continue;
+   End;
+   If Focus = 0 Then Begin
+    If Ev.KeyChar = #8 Then Begin
+     If Length(EditBuf) > 0 Then Delete(EditBuf, Length(EditBuf), 1);
+     Caret := True; DrawEdit;
+    End
+    Else If (Ev.KeyChar >= ' ') And (Length(EditBuf) < FD_MAXNAME) Then Begin
+     EditBuf := EditBuf + Ev.KeyChar;
+     Caret := True; DrawEdit;
+    End;
+    Continue;
+   End;
+   If Focus = 2 Then Begin
+    If (Ev.KeyChar = ' ') And (NFilters > 0) Then Begin
+     Inc(FilterIdx);
+     If FilterIdx >= NFilters Then FilterIdx := 0;
+     RescanDir; DrawFilter; DrawList; DrawScrollbar;
+    End;
+    Continue;
+   End;
+   { Focus = 1 : liste }
+   If Ev.KeyChar = #13 Then Begin
+    If (Sel >= 0) And (Sel < NEntries) Then Begin
+     If Entries[Sel].IsDir Or Entries[Sel].IsDrv Or Entries[Sel].IsUp Then
+      NavigateInto(Sel)
+     Else Begin
+      EditBuf := Entries[Sel].Name;
+      If AcceptFilename Then Begin Result_ := True; Done := True; End;
+     End;
+    End;
+    Continue;
+   End;
+  End;
+
+  If Ev.Kind = EV_KEY_DOWN Then Begin
+   Case Ev.KeyCode Of
+    72: Begin     { Up }
+     If Focus = 1 Then Begin
+      NewSel := Sel - 1;
+      If NewSel < 0 Then NewSel := 0;
+      SelectEntry(NewSel);
+     End;
+    End;
+    80: Begin     { Down }
+     If Focus = 1 Then Begin
+      NewSel := Sel + 1;
+      If NewSel >= NEntries Then NewSel := NEntries - 1;
+      SelectEntry(NewSel);
+     End;
+    End;
+    73: Begin     { PgUp }
+     If Focus = 1 Then Begin
+      NewSel := Sel - NVisible;
+      If NewSel < 0 Then NewSel := 0;
+      SelectEntry(NewSel);
+     End;
+    End;
+    81: Begin     { PgDn }
+     If Focus = 1 Then Begin
+      NewSel := Sel + NVisible;
+      If NewSel >= NEntries Then NewSel := NEntries - 1;
+      SelectEntry(NewSel);
+     End;
+    End;
+    71: Begin SelectEntry(0); End;            { Home }
+    79: Begin SelectEntry(NEntries - 1); End; { End  }
+   End;
+  End;
+
+  If Ev.Kind = EV_CLOSE Then Done := True;
+ Until Done;
+
+ PutImage(X1, Y1, BgBuf^, NormalPut);
+ FreeMem(BgBuf, BufSize);
+ FileOpenDialog := Result_;
+End;
+
 Procedure LoadConfigFile(FName: String);
 Var
  F: Text;
@@ -3274,11 +3905,15 @@ Begin
 End;
 
 Procedure DoLoadConfig;
-Var FName: String;
+Var
+ FName: String;
+ Flt: TFileFiltersArr;
 Begin
  FName := 'GEANT4.CFG';
- If InputBoxStr('Charger configuration',
-    'Nom du fichier (texte KEY=VAL) :', FName, 60) Then
+ Flt[0].Desc := 'Configurations'; Flt[0].Mask := '*.CFG';
+ Flt[1].Desc := 'Tous les fichiers texte'; Flt[1].Mask := '*.TXT';
+ Flt[2].Desc := 'Tous les fichiers'; Flt[2].Mask := '*.*';
+ If FileOpenDialog('Charger une configuration', FName, Flt, 3, False) Then
   If Length(FName) > 0 Then LoadConfigFile(FName);
 End;
 
@@ -3398,11 +4033,15 @@ Begin
 End;
 
 Procedure DoSaveResults;
-Var FName: String;
+Var
+ FName: String;
+ Flt: TFileFiltersArr;
 Begin
  FName := 'GEANT4.OUT';
- If InputBoxStr('Sauver resultats',
-    'Nom du fichier de sortie :', FName, 60) Then
+ Flt[0].Desc := 'Resultats GEANT4'; Flt[0].Mask := '*.OUT';
+ Flt[1].Desc := 'Fichiers texte'; Flt[1].Mask := '*.TXT';
+ Flt[2].Desc := 'Tous les fichiers'; Flt[2].Mask := '*.*';
+ If FileOpenDialog('Sauvegarder les resultats', FName, Flt, 3, True) Then
   If Length(FName) > 0 Then SaveResultsFile(FName);
 End;
 
@@ -3504,11 +4143,14 @@ Begin
 End;
 
 Procedure DoExportImage;
-Var FName: String;
+Var
+ FName: String;
+ Flt: TFileFiltersArr;
 Begin
  FName := 'GEANT4.BMP';
- If InputBoxStr('Exporter image',
-    'Nom du fichier BMP :', FName, 60) Then
+ Flt[0].Desc := 'Images Bitmap'; Flt[0].Mask := '*.BMP';
+ Flt[1].Desc := 'Tous les fichiers'; Flt[1].Mask := '*.*';
+ If FileOpenDialog('Exporter l image au format BMP', FName, Flt, 2, True) Then
   If Length(FName) > 0 Then SaveScreenBMP(FName);
 End;
 
