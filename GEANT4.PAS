@@ -2,7 +2,7 @@
   @created: 2026
   @version: 1.00
   @website(https://www.gladir.com/physiq)
-  @abstract(Target: Turbo Pascal 7, Free Pascal 3.2
+  @abstract(Target: Free Pascal 3.2
   @description: Clone de l'application GEANT4
 }
 
@@ -4367,6 +4367,69 @@ Begin
  If (K = 0) And (NParticles > 0) Then SimRunning := False;
 End;
 
+Var
+ InitialCfgFile: String;
+
+Procedure ShowCmdLineHelp;Begin
+ WriteLn('GEANT4 - Cettte commadne permet de lancer un clone ',
+          'pedagogique du simulateur Geant4.');
+ WriteLn;
+ WriteLn('Syntaxe :');
+ WriteLn('  GEANT4 [fichier.CFG]');
+ WriteLn('  GEANT4 /?');
+ WriteLn;
+ WriteLn('Parametres :');
+ WriteLn('  fichier.CFG    Charge automatiquement le fichier de configuration');
+ WriteLn('                 indique au demarrage (format texte CLE=VALEUR).');
+ WriteLn('  /?, -?, -h     Affiche cette aide et quitte.');
+ WriteLn('  --help, /help');
+ WriteLn;
+ WriteLn('Cles reconnues dans un fichier .CFG :');
+ WriteLn('  BeamKind     = electron | photon | proton | alpha');
+ WriteLn('  BeamEnergy   = <MeV>');
+ WriteLn('  BeamCount    = <entier>');
+ WriteLn('  BeamAngle    = <degres>');
+ WriteLn('  GeomShape    = box | cylinder | sphere');
+ WriteLn('  GeomCX/CY/CZ = <centre cm>');
+ WriteLn('  GeomSX/SY/SZ = <dimensions cm>');
+ WriteLn('  Material     = <nom de materiau>');
+ WriteLn('  SimSpeed     = 1..10');
+ WriteLn;
+ WriteLn('Exemple :');
+ WriteLn('  GEANT4 GEANT4.CFG');
+End;
+
+Function IsHelpArg(S: String): Boolean;
+Var L: String; I: Integer; R: Boolean;
+Begin
+ L := S;
+ For I := 1 To Length(L) Do L[I] := UpCase(L[I]);
+ R := (L = '/?') Or (L = '-?') Or (L = '/H') Or (L = '-H') Or
+      (L = '/HELP') Or (L = '-HELP') Or (L = '--HELP');
+ IsHelpArg := R;
+End;
+
+Procedure ProcessCmdLine;
+Var
+ I: Integer;
+ P: String;
+Begin
+ For I := 1 To ParamCount Do Begin
+  P := ParamStr(I);
+  If IsHelpArg(P) Then Begin
+   ShowCmdLineHelp;
+   Halt(0);
+  End;
+ End;
+ For I := 1 To ParamCount Do Begin
+  P := ParamStr(I);
+  If (Length(P) > 0) And (P[1] <> '/') And (P[1] <> '-') Then Begin
+   InitialCfgFile := P;
+   Exit;
+  End;
+ End;
+End;
+
 Procedure MainLoop;
 Var Ev: TEvent;
 Begin
@@ -4407,6 +4470,8 @@ End;
 BEGIN
  Randomize;
  RGHaveSpare := False;
+ InitialCfgFile := '';
+ ProcessCmdLine;
  InitializeGraphics;
  InitMaterials;
  InitGeometry;
@@ -4436,6 +4501,7 @@ BEGIN
  LastClickX := -1; LastClickY := -1;
  LastClickTime := 0; LastClickBtn := MB_NONE;
  If MouseDriverFound Then ShowMouseCursor;
+ If Length(InitialCfgFile) > 0 Then LoadConfigFile(InitialCfgFile);
  MainLoop;
  If MouseDriverFound Then HideMouseCursor;
  CloseGraph;
