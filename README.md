@@ -18,6 +18,10 @@ Voici la liste des différents fichiers proposés dans PhysiQ :
 		<td><b>EMC2.PAS</b></td>
 		<td>Cette commande permet de calculer l'énergie avec l'équation E = mc<sup>2</sup> d'Albert Einstein.</td>
 	</tr>
+	<tr>
+		<td><b>GEANT4.PAS</b></td>
+		<td>Cette commande permet de lancer un clone pedagogique du simulateur Geant4.</td>
+	</tr>
 	</table>
 
 <h2>Compilation</h2>
