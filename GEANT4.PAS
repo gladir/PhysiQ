@@ -1626,6 +1626,180 @@ Begin
  OutTextXY(X1 + 6, Y1 + 4, Title);
 End;
 
+{ ----------------------------------------------------------
+  Widget BOUTON pour les boites de dialogue.
+  - Hotkey marque avec '&' dans la legende (ex: '&Calculer').
+  - IsDefault : active par [Entree].
+  - IsCancel  : active par [Esc].
+  - Souris : clic dans le rectangle -> active.
+  ---------------------------------------------------------- }
+
+Const
+ DLG_BTN_H     = 22;
+ DLG_BTN_W_MIN = 72;
+
+Type
+ TDlgButton = Record
+  X1, Y1, X2, Y2 : Integer;
+  Caption        : String[24];
+  HotChar        : Char;     { lower-case, #0 si aucun }
+  HotPos         : Integer;  { 1-based dans Caption epuree, 0 si aucun }
+  IsDefault      : Boolean;
+  IsCancel       : Boolean;
+  Pressed        : Boolean;
+ End;
+
+ TDlgButtons = Array[0..7] Of TDlgButton;
+
+Procedure InitDlgButton(Var B: TDlgButton; ACap: String;
+                        ADef, ACancel: Boolean);
+Var P: Integer;
+Begin
+ B.HotChar := #0;
+ B.HotPos := 0;
+ P := Pos('&', ACap);
+ If (P > 0) And (P < Length(ACap)) Then Begin
+  B.HotPos := P;
+  B.HotChar := ACap[P + 1];
+  If (B.HotChar >= 'A') And (B.HotChar <= 'Z') Then
+   B.HotChar := Chr(Ord(B.HotChar) + 32);
+  Delete(ACap, P, 1);
+ End;
+ B.Caption := ACap;
+ B.IsDefault := ADef;
+ B.IsCancel := ACancel;
+ B.Pressed := False;
+ B.X1 := 0; B.Y1 := 0; B.X2 := 0; B.Y2 := 0;
+End;
+
+Procedure LayoutDlgButtons(Var Btns: TDlgButtons; N: Integer;
+                           DX1, DX2, Y: Integer);
+Var I, W, TotW, Gap, X: Integer; Widths: Array[0..7] Of Integer;
+Begin
+ TotW := 0; Gap := 12;
+ For I := 0 To N - 1 Do Begin
+  W := Length(Btns[I].Caption) * 8 + 24;
+  If W < DLG_BTN_W_MIN Then W := DLG_BTN_W_MIN;
+  Widths[I] := W;
+  TotW := TotW + W;
+ End;
+ X := ((DX1 + DX2) - (TotW + (N - 1) * Gap)) Div 2;
+ For I := 0 To N - 1 Do Begin
+  Btns[I].X1 := X;
+  Btns[I].Y1 := Y;
+  Btns[I].X2 := X + Widths[I];
+  Btns[I].Y2 := Y + DLG_BTN_H;
+  X := X + Widths[I] + Gap;
+ End;
+End;
+
+Procedure DrawDlgButton(Var B: TDlgButton);
+Var TX, TY, HX, UY: Integer;
+Begin
+ { Ombre }
+ SetFillStyle(SolidFill, CLR_TITLEBAR);
+ Bar(B.X1 + 2, B.Y1 + 2, B.X2 + 2, B.Y2 + 2);
+ { Corps }
+ SetFillStyle(SolidFill, CLR_BACKGROUND);
+ Bar(B.X1, B.Y1, B.X2, B.Y2);
+ { Relief 3D inverse si enfonce }
+ If B.Pressed Then Begin
+  SetColor(Black);
+  Line(B.X1, B.Y1, B.X2, B.Y1);
+  Line(B.X1, B.Y1, B.X1, B.Y2);
+  SetColor(White);
+  Line(B.X1, B.Y2, B.X2, B.Y2);
+  Line(B.X2, B.Y1, B.X2, B.Y2);
+ End Else Begin
+  SetColor(White);
+  Line(B.X1, B.Y1, B.X2, B.Y1);
+  Line(B.X1, B.Y1, B.X1, B.Y2);
+  SetColor(Black);
+  Line(B.X1, B.Y2, B.X2, B.Y2);
+  Line(B.X2, B.Y1, B.X2, B.Y2);
+ End;
+ { Cadre exterieur pour le bouton par defaut }
+ If B.IsDefault Then Begin
+  SetColor(Black);
+  Rectangle(B.X1 - 2, B.Y1 - 2, B.X2 + 2, B.Y2 + 2);
+ End;
+ { Legende centree }
+ TX := B.X1 + ((B.X2 - B.X1) - Length(B.Caption) * 8) Div 2;
+ TY := B.Y1 + ((B.Y2 - B.Y1) - 8) Div 2;
+ If B.Pressed Then Begin
+  Inc(TX); Inc(TY);
+ End;
+ SetColor(Black);
+ OutTextXY(TX, TY, B.Caption);
+ If B.HotPos > 0 Then Begin
+  HX := TX + (B.HotPos - 1) * 8;
+  UY := TY + 9;
+  Line(HX, UY, HX + 7, UY);
+ End;
+End;
+
+Procedure DrawDlgButtons(Var Btns: TDlgButtons; N: Integer);
+Var I: Integer;
+Begin
+ For I := 0 To N - 1 Do DrawDlgButton(Btns[I]);
+End;
+
+Function HitDlgButton(Var B: TDlgButton; MX, MY: Integer): Boolean;
+Begin
+ HitDlgButton := (MX >= B.X1) And (MX <= B.X2) And
+                 (MY >= B.Y1) And (MY <= B.Y2);
+End;
+
+Procedure FlashDlgButton(Var B: TDlgButton);
+Var T0, T: LongInt;
+Begin
+ B.Pressed := True;  DrawDlgButton(B);
+ T0 := GetTimestamp;
+ Repeat T := GetTimestamp Until (T - T0) >= 70;
+ B.Pressed := False; DrawDlgButton(B);
+End;
+
+{ Verifie si l evenement active un bouton.
+  Renvoie l index 0..N-1 active, ou -1 si aucun. }
+Function HandleDlgButtonEvent(Var Btns: TDlgButtons; N: Integer;
+                              Var Ev: TEvent): Integer;
+Var I: Integer; LCh: Char;
+Begin
+ HandleDlgButtonEvent := -1;
+ If Ev.Kind = EV_MOUSE_DOWN Then Begin
+  For I := 0 To N - 1 Do
+   If HitDlgButton(Btns[I], Ev.MouseX, Ev.MouseY) Then Begin
+    FlashDlgButton(Btns[I]);
+    HandleDlgButtonEvent := I;
+    Exit;
+   End;
+ End
+ Else If Ev.Kind = EV_KEY_CHAR Then Begin
+  LCh := Ev.KeyChar;
+  If LCh = #13 Then Begin
+   For I := 0 To N - 1 Do
+    If Btns[I].IsDefault Then Begin
+     FlashDlgButton(Btns[I]); HandleDlgButtonEvent := I; Exit;
+    End;
+   Exit;
+  End;
+  If LCh = #27 Then Begin
+   For I := 0 To N - 1 Do
+    If Btns[I].IsCancel Then Begin
+     FlashDlgButton(Btns[I]); HandleDlgButtonEvent := I; Exit;
+    End;
+   Exit;
+  End;
+  If (LCh >= 'A') And (LCh <= 'Z') Then LCh := Chr(Ord(LCh) + 32);
+  For I := 0 To N - 1 Do
+   If (Btns[I].HotChar <> #0) And (Btns[I].HotChar = LCh) Then Begin
+    FlashDlgButton(Btns[I]);
+    HandleDlgButtonEvent := I;
+    Exit;
+   End;
+ End;
+End;
+
 Function ReadKeyChar(Var IsExt: Boolean): Char;
 Var Ch: Char;
 Begin
@@ -1639,18 +1813,39 @@ Begin
  ReadKeyChar := Ch;
 End;
 
-{ Boite de saisie simple : retourne True si OK, False si Escape }
+{ Boite de saisie texte : boutons OK / Annuler.
+  Retourne True si OK (mouse ou Entree), False si Annuler/Esc. }
 Function InputBoxStr(Title, Prompt: String; Var Value: String;
  MaxLen: Integer): Boolean;
 Var
  X1, Y1, X2, Y2, BX, BY: Integer;
- Ch: Char;
- IsExt: Boolean;
+ Ev: TEvent;
  Buf: String;
  BufSize: LongInt;
  BgBuf: Pointer;
+ Btns: TDlgButtons;
+ Hit: Integer;
+ Done: Boolean;
+ Caret: Boolean;
+ LastBlink, Now: LongInt;
+
+ Procedure DrawField;
+ Begin
+  SetFillStyle(SolidFill, White);
+  Bar(BX, BY, X2 - 12, BY + 18);
+  SetColor(CLR_BORDER);
+  Rectangle(BX - 1, BY - 1, X2 - 11, BY + 19);
+  SetColor(Black);
+  OutTextXY(BX + 2, BY + 4, Buf);
+  If Caret Then Begin
+   SetColor(Black);
+   Line(BX + 2 + Length(Buf) * 8, BY + 3,
+        BX + 2 + Length(Buf) * 8, BY + 14);
+  End;
+ End;
+
 Begin
- X1 := 100; Y1 := 180; X2 := 540; Y2 := 300;
+ X1 := 100; Y1 := 170; X2 := 540; Y2 := 310;
  BufSize := ImageSize(X1, Y1, X2 + 4, Y2 + 4);
  GetMem(BgBuf, BufSize);
  GetImage(X1, Y1, X2 + 4, Y2 + 4, BgBuf^);
@@ -1658,35 +1853,38 @@ Begin
  SetColor(Black);
  OutTextXY(X1 + 12, Y1 + 30, Prompt);
  BX := X1 + 12; BY := Y1 + 60;
- SetFillStyle(SolidFill, White);
- Bar(BX, BY, X2 - 12, BY + 18);
- SetColor(CLR_BORDER);
- Rectangle(BX - 1, BY - 1, X2 - 11, BY + 19);
- SetColor(Black);
- OutTextXY(X1 + 12, Y2 - 20, '[Entree]=OK  [Esc]=Annuler');
  Buf := Value;
- OutTextXY(BX + 2, BY + 4, Buf);
+ Caret := True; LastBlink := GetTimestamp;
+ DrawField;
+ InitDlgButton(Btns[0], 'OK',      True,  False);
+ InitDlgButton(Btns[1], 'Annuler', False, True);
+ LayoutDlgButtons(Btns, 2, X1, X2, Y2 - DLG_BTN_H - 10);
+ DrawDlgButtons(Btns, 2);
  InputBoxStr := False;
+ Done := False;
  Repeat
-  Ch := ReadKeyChar(IsExt);
-  If IsExt Then Continue;
-  If Ch = #13 Then Begin
-   Value := Buf;
-   InputBoxStr := True;
-   Break;
+  PollEvents(Ev);
+  Now := GetTimestamp;
+  If (Now - LastBlink) > 400 Then Begin
+   Caret := Not Caret; LastBlink := Now; DrawField;
   End;
-  If Ch = #27 Then Break;
-  If Ch = #8 Then Begin
-   If Length(Buf) > 0 Then Delete(Buf, Length(Buf), 1);
-  End Else Begin
-   If (Length(Buf) < MaxLen) And (Ch >= ' ') Then
-    Buf := Buf + Ch;
+  If Ev.Kind = EV_NONE Then Begin
+   Delay(15); Continue;
   End;
-  SetFillStyle(SolidFill, White);
-  Bar(BX, BY, X2 - 12, BY + 18);
-  SetColor(Black);
-  OutTextXY(BX + 2, BY + 4, Buf);
- Until False;
+  Hit := HandleDlgButtonEvent(Btns, 2, Ev);
+  If Hit = 0 Then Begin Value := Buf; InputBoxStr := True; Done := True; End
+  Else If Hit = 1 Then Done := True
+  Else If Ev.Kind = EV_KEY_CHAR Then Begin
+   If Ev.KeyChar = #8 Then Begin
+    If Length(Buf) > 0 Then Delete(Buf, Length(Buf), 1);
+    Caret := True; DrawField;
+   End
+   Else If (Ev.KeyChar >= ' ') And (Length(Buf) < MaxLen) Then Begin
+    Buf := Buf + Ev.KeyChar;
+    Caret := True; DrawField;
+   End;
+  End;
+ Until Done;
  PutImage(X1, Y1, BgBuf^, NormalPut);
  FreeMem(BgBuf, BufSize);
 End;
@@ -1719,17 +1917,19 @@ Var
  X1, Y1, X2, Y2, I, MaxL: Integer;
  BufSize: LongInt;
  BgBuf: Pointer;
- Ch: Char;
- IsExt: Boolean;
+ Ev: TEvent;
+ Btns: TDlgButtons;
+ Done: Boolean;
 Begin
  MaxL := 0;
  For I := 0 To High(Lines) Do
   If Length(Lines[I]) > MaxL Then MaxL := Length(Lines[I]);
  If MaxL < Length(Title) Then MaxL := Length(Title);
+ If MaxL < 24 Then MaxL := 24;
  X1 := (SCREEN_W - (MaxL * 8 + 32)) Div 2;
- Y1 := 120;
+ Y1 := 110;
  X2 := X1 + MaxL * 8 + 32;
- Y2 := Y1 + 40 + (High(Lines) + 1) * 14 + 20;
+ Y2 := Y1 + 36 + (High(Lines) + 1) * 14 + DLG_BTN_H + 18;
  BufSize := ImageSize(X1, Y1, X2 + 4, Y2 + 4);
  GetMem(BgBuf, BufSize);
  GetImage(X1, Y1, X2 + 4, Y2 + 4, BgBuf^);
@@ -1737,39 +1937,51 @@ Begin
  SetColor(Black);
  For I := 0 To High(Lines) Do
   OutTextXY(X1 + 12, Y1 + 28 + I * 14, Lines[I]);
- OutTextXY(X1 + 12, Y2 - 16, '[Toute touche pour fermer]');
+ InitDlgButton(Btns[0], 'OK', True, True);
+ LayoutDlgButtons(Btns, 1, X1, X2, Y2 - DLG_BTN_H - 8);
+ DrawDlgButtons(Btns, 1);
+ Done := False;
  Repeat
-  Ch := ReadKeyChar(IsExt);
- Until True;
+  PollEvents(Ev);
+  If Ev.Kind = EV_NONE Then Begin Delay(15); Continue; End;
+  If HandleDlgButtonEvent(Btns, 1, Ev) >= 0 Then Done := True;
+ Until Done;
  PutImage(X1, Y1, BgBuf^, NormalPut);
  FreeMem(BgBuf, BufSize);
 End;
 
-{ Choix d un element dans une liste }
+{ Choix d un element dans une liste : boutons OK / Annuler,
+  navigation clavier (Up/Dn/Home/End) ou souris (clic = select,
+  double-clic = valider). }
 Function ChoiceBox(Title: String; Items: Array Of String;
  NItems: Integer; Var Idx: Integer): Boolean;
 Var
  X1, Y1, X2, Y2, I, MaxL, N, Cur: Integer;
+ LstX1, LstY1, LstX2, LstY2: Integer;
  BufSize: LongInt;
  BgBuf: Pointer;
- Ch: Char;
- IsExt: Boolean;
+ Ev: TEvent;
+ Btns: TDlgButtons;
+ Hit: Integer;
+ Done: Boolean;
 
  Procedure RedrawList;
  Var J, YY: Integer;
  Begin
   SetFillStyle(SolidFill, CLR_BACKGROUND);
-  Bar(X1 + 4, Y1 + 22, X2 - 4, Y2 - 22);
+  Bar(LstX1, LstY1, LstX2, LstY2);
   For J := 0 To N - 1 Do Begin
-   YY := Y1 + 30 + J * 14;
+   YY := LstY1 + 2 + J * 14;
    If J = Cur Then Begin
     SetFillStyle(SolidFill, CLR_MENU_HIGHLIGHT);
-    Bar(X1 + 8, YY - 2, X2 - 8, YY + 11);
+    Bar(LstX1 + 2, YY - 2, LstX2 - 2, YY + 11);
     SetColor(White);
    End Else
     SetColor(Black);
-   OutTextXY(X1 + 12, YY, Items[J]);
+   OutTextXY(LstX1 + 6, YY, Items[J]);
   End;
+  SetColor(CLR_BORDER);
+  Rectangle(LstX1, LstY1, LstX2, LstY2);
  End;
 
 Begin
@@ -1779,36 +1991,54 @@ Begin
  For I := 0 To N - 1 Do
   If Length(Items[I]) > MaxL Then MaxL := Length(Items[I]);
  X1 := (SCREEN_W - (MaxL * 8 + 40)) Div 2;
- Y1 := 80;
+ Y1 := 70;
  X2 := X1 + MaxL * 8 + 40;
- Y2 := Y1 + 40 + N * 14 + 24;
+ Y2 := Y1 + 28 + N * 14 + 12 + DLG_BTN_H + 16;
  Cur := Idx;
  If (Cur < 0) Or (Cur >= N) Then Cur := 0;
  BufSize := ImageSize(X1, Y1, X2 + 4, Y2 + 4);
  GetMem(BgBuf, BufSize);
  GetImage(X1, Y1, X2 + 4, Y2 + 4, BgBuf^);
  DialogBox(X1, Y1, X2, Y2, Title);
- SetColor(Black);
- OutTextXY(X1 + 12, Y2 - 16, '[Up/Dn] [Entree]=OK [Esc]=Annuler');
+ LstX1 := X1 + 8;   LstY1 := Y1 + 24;
+ LstX2 := X2 - 8;   LstY2 := LstY1 + N * 14 + 4;
  RedrawList;
+ InitDlgButton(Btns[0], 'OK',      True,  False);
+ InitDlgButton(Btns[1], 'Annuler', False, True);
+ LayoutDlgButtons(Btns, 2, X1, X2, Y2 - DLG_BTN_H - 8);
+ DrawDlgButtons(Btns, 2);
  ChoiceBox := False;
+ Done := False;
  Repeat
-  Ch := ReadKeyChar(IsExt);
-  If IsExt Then Begin
-   Case Ord(Ch) Of
-    72: If Cur > 0 Then Dec(Cur);
-    80: If Cur < N - 1 Then Inc(Cur);
+  PollEvents(Ev);
+  If Ev.Kind = EV_NONE Then Begin Delay(15); Continue; End;
+  { Selection souris sur la liste }
+  If (Ev.Kind = EV_MOUSE_DOWN) Or (Ev.Kind = EV_MOUSE_DBLCLICK) Then
+   If (Ev.MouseX >= LstX1) And (Ev.MouseX <= LstX2) And
+      (Ev.MouseY >= LstY1) And (Ev.MouseY <= LstY2) Then Begin
+    I := (Ev.MouseY - LstY1 - 2) Div 14;
+    If (I >= 0) And (I < N) Then Begin
+     Cur := I; RedrawList;
+     If Ev.Kind = EV_MOUSE_DBLCLICK Then Begin
+      Idx := Cur; ChoiceBox := True; Done := True; Continue;
+     End;
+    End;
+    Continue;
    End;
-   RedrawList;
-  End Else Begin
-   If Ch = #13 Then Begin
-    Idx := Cur;
-    ChoiceBox := True;
-    Break;
+  Hit := HandleDlgButtonEvent(Btns, 2, Ev);
+  If Hit = 0 Then Begin
+   Idx := Cur; ChoiceBox := True; Done := True;
+  End
+  Else If Hit = 1 Then Done := True
+  Else If Ev.Kind = EV_KEY_DOWN Then Begin
+   Case Ev.KeyCode Of
+    72: If Cur > 0       Then Begin Dec(Cur); RedrawList; End;
+    80: If Cur < N - 1   Then Begin Inc(Cur); RedrawList; End;
+    71: Begin Cur := 0;     RedrawList; End;     { Home }
+    79: Begin Cur := N - 1; RedrawList; End;     { End  }
    End;
-   If Ch = #27 Then Break;
   End;
- Until False;
+ Until Done;
  PutImage(X1, Y1, BgBuf^, NormalPut);
  FreeMem(BgBuf, BufSize);
 End;
@@ -2437,20 +2667,21 @@ End;
   DIALOGUE ET GRAPHEUR POUR FORMULES
   ============================================================ }
 
-{ Dessine la boite formule : zone vars + bouton Calculer / Tracer.
+{ Dessine la boite formule : zone vars + bouton Calculer / Tracer / Fermer.
   Retourne True si l utilisateur veut tracer. }
 Function FormulaDialog(Var F: TFormula): Boolean;
 Var
  X1, Y1, X2, Y2, I, YY: Integer;
+ LstX1, LstY1, LstX2, LstY2, LstRowH: Integer;
  BufSize: LongInt;
  BgBuf: Pointer;
- Ch: Char;
- IsExt: Boolean;
+ Ev: TEvent;
  Done, Ok: Boolean;
  Sel: Integer;
  S: String;
- V: Real;
  Unk: Integer;
+ Btns: TDlgButtons;
+ Hit: Integer;
 
  Procedure RedrawAll;
  Var J: Integer; SC: String;
@@ -2462,23 +2693,70 @@ Var
   OutTextXY(X1 + 12, Y1 + 42,
    'Cochez les valeurs CONNUES, laissez 1 inconnue.');
   For J := 0 To F.NVars - 1 Do Begin
-   YY := Y1 + 64 + J * 18;
+   YY := LstY1 + J * LstRowH;
    If J = Sel Then Begin
     SetFillStyle(SolidFill, CLR_MENU_HIGHLIGHT);
-    Bar(X1 + 8, YY - 2, X2 - 8, YY + 14);
+    Bar(LstX1, YY - 2, LstX2, YY + LstRowH - 4);
     SetColor(White);
    End Else
     SetColor(Black);
    If F.Vars[J].Known Then SC := '[X] ' Else SC := '[ ] ';
    S := SC + F.Vars[J].Symbol + ' (' + F.Vars[J].Name + ') = ' +
         RealToStr(F.Vars[J].Value, 1, 4) + ' ' + F.Vars[J].Unite;
-   OutTextXY(X1 + 12, YY, S);
+   OutTextXY(LstX1 + 4, YY, S);
   End;
   SetColor(Black);
-  OutTextXY(X1 + 12, Y2 - 44,
-   '[Up/Dn]=select [Space]=connu/?  [Entree]=editer val.');
-  OutTextXY(X1 + 12, Y2 - 30,
-   '[C]=Calculer  [T]=Tracer (2 var)  [Esc]=Fermer');
+  OutTextXY(X1 + 12, Y2 - 60,
+   'Souris : clic sur une ligne pour selectionner / cocher.');
+  OutTextXY(X1 + 12, Y2 - 46,
+   'Clavier : [Up/Dn]=select  [Space]=cocher  [Entree]=editer.');
+ End;
+
+ Procedure EditCurrentValue;
+ Begin
+  S := RealToStr(F.Vars[Sel].Value, 1, 6);
+  PutImage(X1, Y1, BgBuf^, NormalPut);
+  If InputBoxStr('Valeur ' + F.Vars[Sel].Symbol,
+     'Entrez la valeur (' + F.Vars[Sel].Unite + ') :',
+     S, 30) Then Begin
+   F.Vars[Sel].Value := StrToRealDef(S, F.Vars[Sel].Value);
+   F.Vars[Sel].Known := True;
+  End;
+  DialogBox(X1, Y1, X2, Y2, F.Name);
+  RedrawAll;
+  DrawDlgButtons(Btns, 3);
+ End;
+
+ Procedure DoCalcul;
+ Var J: Integer;
+ Begin
+  Unk := -1; Ok := True;
+  For J := 0 To F.NVars - 1 Do
+   If Not F.Vars[J].Known Then Begin
+    If Unk >= 0 Then Ok := False Else Unk := J;
+   End;
+  If (Unk < 0) Or (Not Ok) Then Begin
+   PutImage(X1, Y1, BgBuf^, NormalPut);
+   MessageBox('Erreur',
+    ['Marquez exactement une variable comme inconnue.']);
+   DialogBox(X1, Y1, X2, Y2, F.Name);
+   RedrawAll; DrawDlgButtons(Btns, 3);
+   Exit;
+  End;
+  If SolveFormula(F, Unk) Then Begin
+   PutImage(X1, Y1, BgBuf^, NormalPut);
+   MessageBox('Resultat',
+    [F.Vars[Unk].Symbol + ' = ' +
+     RealToStr(F.Vars[Unk].Value, 1, 6) + ' ' +
+     F.Vars[Unk].Unite]);
+  End Else Begin
+   PutImage(X1, Y1, BgBuf^, NormalPut);
+   MessageBox('Erreur',
+    ['Impossible de resoudre pour ' + F.Vars[Unk].Symbol,
+     'avec les valeurs fournies.']);
+  End;
+  DialogBox(X1, Y1, X2, Y2, F.Name);
+  RedrawAll; DrawDlgButtons(Btns, 3);
  End;
 
 Begin
@@ -2489,76 +2767,53 @@ Begin
  GetMem(BgBuf, BufSize);
  GetImage(X1, Y1, X2 + 4, Y2 + 4, BgBuf^);
  DialogBox(X1, Y1, X2, Y2, F.Name);
- Sel := 0;
- Done := False;
+ LstX1 := X1 + 8;  LstY1 := Y1 + 64;
+ LstX2 := X2 - 8;  LstRowH := 18;
+ LstY2 := LstY1 + F.NVars * LstRowH;
+ Sel := 0; Done := False;
  FormulaDialog := False;
  RedrawAll;
+ InitDlgButton(Btns[0], '&Calculer', True,  False);
+ InitDlgButton(Btns[1], '&Tracer',   False, False);
+ InitDlgButton(Btns[2], 'Fer&mer',   False, True);
+ LayoutDlgButtons(Btns, 3, X1, X2, Y2 - DLG_BTN_H - 10);
+ DrawDlgButtons(Btns, 3);
  Repeat
-  Ch := ReadKeyChar(IsExt);
-  If IsExt Then Begin
-   Case Ord(Ch) Of
-    72: If Sel > 0 Then Dec(Sel);
-    80: If Sel < F.NVars - 1 Then Inc(Sel);
-   End;
-   RedrawAll;
-  End Else Begin
-   Case Ch Of
-    #27: Done := True;
-    #13: Begin
-     S := RealToStr(F.Vars[Sel].Value, 1, 6);
-     PutImage(X1, Y1, BgBuf^, NormalPut);
-     If InputBoxStr('Valeur ' + F.Vars[Sel].Symbol,
-        'Entrez la valeur (' + F.Vars[Sel].Unite + ') :',
-        S, 30) Then Begin
-      F.Vars[Sel].Value := StrToRealDef(S, F.Vars[Sel].Value);
-      F.Vars[Sel].Known := True;
-     End;
-     DialogBox(X1, Y1, X2, Y2, F.Name);
+  PollEvents(Ev);
+  If Ev.Kind = EV_NONE Then Begin Delay(15); Continue; End;
+  { Clic souris sur la liste de variables }
+  If (Ev.Kind = EV_MOUSE_DOWN) Or (Ev.Kind = EV_MOUSE_DBLCLICK) Then
+   If (Ev.MouseX >= LstX1) And (Ev.MouseX <= LstX2) And
+      (Ev.MouseY >= LstY1) And (Ev.MouseY <  LstY2) Then Begin
+    I := (Ev.MouseY - LstY1) Div LstRowH;
+    If (I >= 0) And (I < F.NVars) Then Begin
+     Sel := I;
+     { Clic sur la zone [X]/[ ] (premiere colonne) : toggle Known }
+     If Ev.MouseX < LstX1 + 30 Then
+      F.Vars[Sel].Known := Not F.Vars[Sel].Known;
      RedrawAll;
+     If Ev.Kind = EV_MOUSE_DBLCLICK Then EditCurrentValue;
     End;
-    ' ': Begin
-     F.Vars[Sel].Known := Not F.Vars[Sel].Known;
-     RedrawAll;
-    End;
-    'c', 'C': Begin
-     { Trouver l unique inconnue }
-     Unk := -1;
-     Ok := True;
-     For I := 0 To F.NVars - 1 Do
-      If Not F.Vars[I].Known Then Begin
-       If Unk >= 0 Then Ok := False
-       Else Unk := I;
-      End;
-     If (Unk < 0) Or (Not Ok) Then Begin
-      PutImage(X1, Y1, BgBuf^, NormalPut);
-      MessageBox('Erreur',
-       ['Marquez exactement une variable comme inconnue.']);
-      DialogBox(X1, Y1, X2, Y2, F.Name);
-      RedrawAll;
-     End Else Begin
-      If SolveFormula(F, Unk) Then Begin
-       PutImage(X1, Y1, BgBuf^, NormalPut);
-       MessageBox('Resultat',
-        [F.Vars[Unk].Symbol + ' = ' +
-         RealToStr(F.Vars[Unk].Value, 1, 6) + ' ' +
-         F.Vars[Unk].Unite]);
-       DialogBox(X1, Y1, X2, Y2, F.Name);
-       RedrawAll;
-      End Else Begin
-       PutImage(X1, Y1, BgBuf^, NormalPut);
-       MessageBox('Erreur',
-        ['Impossible de resoudre pour ' + F.Vars[Unk].Symbol,
-         'avec les valeurs fournies.']);
-       DialogBox(X1, Y1, X2, Y2, F.Name);
-       RedrawAll;
-      End;
-     End;
-    End;
-    't', 'T': Begin
-     FormulaDialog := True;
-     Done := True;
-    End;
+    Continue;
    End;
+  Hit := HandleDlgButtonEvent(Btns, 3, Ev);
+  If Hit = 0 Then DoCalcul
+  Else If Hit = 1 Then Begin
+   FormulaDialog := True; Done := True;
+  End
+  Else If Hit = 2 Then Done := True
+  Else If Ev.Kind = EV_KEY_DOWN Then Begin
+   Case Ev.KeyCode Of
+    72: If Sel > 0           Then Begin Dec(Sel); RedrawAll; End;
+    80: If Sel < F.NVars - 1 Then Begin Inc(Sel); RedrawAll; End;
+   End;
+  End
+  Else If Ev.Kind = EV_KEY_CHAR Then Begin
+   If Ev.KeyChar = ' ' Then Begin
+    F.Vars[Sel].Known := Not F.Vars[Sel].Known;
+    RedrawAll;
+   End
+   Else If Ev.KeyChar = #13 Then EditCurrentValue;
   End;
  Until Done;
  PutImage(X1, Y1, BgBuf^, NormalPut);
@@ -2575,8 +2830,9 @@ Var
  NC, Sel: Integer;
  BufSize: LongInt;
  BgBuf: Pointer;
- Ch: Char;
- IsExt: Boolean;
+ Ev: TEvent;
+ Btns: TDlgButtons;
+ Done: Boolean;
  SaveKnown: Array[0..MAX_FORM_VARS-1] Of Boolean;
  SaveVal: Array[0..MAX_FORM_VARS-1] Of Real;
  OK: Boolean;
@@ -2690,10 +2946,15 @@ Begin
   End;
  End;
  SetColor(White);
- OutTextXY(GX1 + 4, GY2 - 28, '[Toute touche pour fermer]');
+ InitDlgButton(Btns[0], 'Fer&mer', True, True);
+ LayoutDlgButtons(Btns, 1, GX1, GX2, GY2 - DLG_BTN_H - 4);
+ DrawDlgButtons(Btns, 1);
+ Done := False;
  Repeat
-  Ch := ReadKeyChar(IsExt);
- Until True;
+  PollEvents(Ev);
+  If Ev.Kind = EV_NONE Then Begin Delay(15); Continue; End;
+  If HandleDlgButtonEvent(Btns, 1, Ev) >= 0 Then Done := True;
+ Until Done;
  PutImage(GX1 - 4, GY1 - 4, BgBuf^, NormalPut);
  FreeMem(BgBuf, BufSize);
 
