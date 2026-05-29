@@ -1,5 +1,5 @@
 # PhysiQ
-Liste de commandes écrite en Pascal sur la physique.
+Liste de commandes écrite en Pascal (Turbo Pascal ou Free Pascal) sur la physique.
 
 <h2>Liste des fichiers</h2>
 
