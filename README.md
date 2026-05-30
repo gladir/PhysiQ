@@ -26,6 +26,10 @@ Voici la liste des différents fichiers proposés dans PhysiQ :
 		<td><b>GEANT4.PAS</b></td>
 		<td>Cette commande permet de lancer un clone pedagogique du simulateur Geant4.</td>
 	</tr>
+	<tr>
+		<td><b>OCTOPUS.PAS</b></td>
+		<td>Cette commande permet de lancer l'analyseur d'entrée Octopus.</td>
+	</tr>
 	</table>
 
 <h2>Compilation</h2>
