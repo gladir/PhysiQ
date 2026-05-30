@@ -1,0 +1,17 @@
+# 09_ising_metropolis : meme physique que 03 mais update LOCAL.
+# A comparer avec 03_ising_critical.parm pour voir l'effet du
+# ralentissement critique : les erreurs sur C et chi sont plus
+# grandes avec Metropolis a SWEEPS egal pres de T_c.
+
+LATTICE        = "square lattice"
+MODEL          = "Ising"
+UPDATE         = "local"
+
+L              = 32
+T              = 2.26918531
+J              = 1.0
+H              = 0.0
+
+THERMALIZATION = 5000
+SWEEPS         = 30000
+SEED           = 1009

@@ -1,0 +1,19 @@
+# 03_ising_critical : Ising 2D au point critique exact
+# T_c = 2 / ln(1 + sqrt(2)) = 2.26918531421...
+# Reperes Onsager (limite L -> infini):
+#   E/site(T_c) = -sqrt(2) ~ -1.41421
+#   Cumulant de Binder U* ~ 0.6107 (universel)
+# Le ralentissement critique justifie ici l'algorithme cluster.
+
+LATTICE        = "square lattice"
+MODEL          = "Ising"
+UPDATE         = "cluster"
+
+L              = 32
+T              = 2.26918531
+J              = 1.0
+H              = 0.0
+
+THERMALIZATION = 3000
+SWEEPS         = 30000
+SEED           = 1003

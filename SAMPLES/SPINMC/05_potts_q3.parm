@@ -1,0 +1,16 @@
+# 05_potts_q3 : Modele de Potts a 3 etats au point critique
+# T_c(q=3) = 1 / ln(1 + sqrt(3)) = 0.99497...
+# Transition continue (q <= 4) avec exposants conformes connus.
+
+LATTICE        = "square lattice"
+MODEL          = "Potts"
+UPDATE         = "cluster"
+
+L              = 24
+Q              = 3
+T              = 0.99497
+J              = 1.0
+
+THERMALIZATION = 2000
+SWEEPS         = 20000
+SEED           = 1005

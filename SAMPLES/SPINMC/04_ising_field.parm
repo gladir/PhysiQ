@@ -1,0 +1,17 @@
+# 04_ising_field : Ising 2D sous champ externe
+# Champ H = 0.1 (favorise les spins +1) a T = 2.0 (sous T_c).
+# L'aimantation devrait etre quasi-saturee dans la direction +1
+# et l'energie inclut le terme -H*M.
+
+LATTICE        = "square lattice"
+MODEL          = "Ising"
+UPDATE         = "local"
+
+L              = 24
+T              = 2.0
+J              = 1.0
+H              = 0.1
+
+THERMALIZATION = 2000
+SWEEPS         = 15000
+SEED           = 1004

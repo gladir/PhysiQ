@@ -1,0 +1,16 @@
+# 01_ising_lowT : Ising 2D dans la phase ordonnee
+# T = 1.5 << T_c (~ 2.269)  -> aimantation spontanee proche de 1.
+# Update local Metropolis suffit a basse T (cluster pas critique ici).
+
+LATTICE        = "square lattice"
+MODEL          = "Ising"
+UPDATE         = "local"
+
+L              = 24
+T              = 1.5
+J              = 1.0
+H              = 0.0
+
+THERMALIZATION = 2000
+SWEEPS         = 20000
+SEED           = 1001

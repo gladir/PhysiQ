@@ -1,0 +1,17 @@
+# 07_xy_lowT : Modele XY 2D dans la phase quasi-ordonnee
+# Sous la temperature de Kosterlitz-Thouless T_KT ~ 0.893.
+# Pas de vraie aimantation (theoreme de Mermin-Wagner) mais
+# la pseudo-aimantation sur taille finie reste proche de 1.
+# Le cluster Wolff n'est pas implemente pour XY -> repli Metropolis.
+
+LATTICE        = "square lattice"
+MODEL          = "XY"
+UPDATE         = "local"
+
+L              = 24
+T              = 0.4
+J              = 1.0
+
+THERMALIZATION = 3000
+SWEEPS         = 20000
+SEED           = 1007

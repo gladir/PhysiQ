@@ -1,0 +1,16 @@
+# 02_ising_highT : Ising 2D dans la phase desordonnee
+# T = 4.0 >> T_c.  Energie/site -> -0.5 environ, |M|/site ~ 0.05.
+# A haute T, le Metropolis local decorrele tres vite.
+
+LATTICE        = "square lattice"
+MODEL          = "Ising"
+UPDATE         = "local"
+
+L              = 24
+T              = 4.0
+J              = 1.0
+H              = 0.0
+
+THERMALIZATION = 1000
+SWEEPS         = 20000
+SEED           = 1002

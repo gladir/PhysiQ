@@ -1,0 +1,18 @@
+# 06_potts_q8 : Modele de Potts a 8 etats au point critique
+# T_c(q=8) = 1 / ln(1 + sqrt(8)) = 0.74515...
+# Pour q > 4 : transition du PREMIER ORDRE, pic de chaleur specifique
+# tres etroit et bistabilite a T_c.  Sur taille L=24 finie on observe
+# une grande chaleur specifique et un cumulant de Binder atypique.
+
+LATTICE        = "square lattice"
+MODEL          = "Potts"
+UPDATE         = "cluster"
+
+L              = 24
+Q              = 8
+T              = 0.74515
+J              = 1.0
+
+THERMALIZATION = 3000
+SWEEPS         = 25000
+SEED           = 1006

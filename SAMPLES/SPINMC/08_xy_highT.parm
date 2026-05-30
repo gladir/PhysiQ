@@ -1,0 +1,14 @@
+# 08_xy_highT : Modele XY 2D dans la phase desordonnee
+# T = 1.5 nettement au-dessus de T_KT ~ 0.893.  Aimantation s'effondre.
+
+LATTICE        = "square lattice"
+MODEL          = "XY"
+UPDATE         = "local"
+
+L              = 24
+T              = 1.5
+J              = 1.0
+
+THERMALIZATION = 2000
+SWEEPS         = 15000
+SEED           = 1008

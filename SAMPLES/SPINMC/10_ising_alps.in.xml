@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  10_ising_alps : exemple de fichier .in.xml au format ALPS
+  (sous-ensemble minimal reconnu par SPINMC.EXE).
+  Genere normalement par parameter2xml a partir d'un .parm.
+  Lance via :
+     SPINMC.EXE --write-xml SAMPLES\SPINMC\10_ising_alps.in.xml
+-->
+<SIMULATION>
+ <PARAMETERS>
+  <PARAMETER name="LATTICE">"square lattice"</PARAMETER>
+  <PARAMETER name="MODEL">"Ising"</PARAMETER>
+  <PARAMETER name="UPDATE">"cluster"</PARAMETER>
+  <PARAMETER name="L">32</PARAMETER>
+  <PARAMETER name="T">2.26918531</PARAMETER>
+  <PARAMETER name="J">1.0</PARAMETER>
+  <PARAMETER name="H">0.0</PARAMETER>
+  <PARAMETER name="THERMALIZATION">3000</PARAMETER>
+  <PARAMETER name="SWEEPS">30000</PARAMETER>
+  <PARAMETER name="SEED">1010</PARAMETER>
+ </PARAMETERS>
+</SIMULATION>

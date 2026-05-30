@@ -202,24 +202,30 @@ Begin
 End;
 
 Function BaseName(FName: String): String;
-Var I, P: Integer;
+Var I, P, DirEnd: Integer; Dir, Stem: String;
 Begin
- { Retire chemin }
- P := 0;
+ { Conserve le chemin : on coupe seulement l'extension. }
+ DirEnd := 0;
  For I := Length(FName) DownTo 1 Do
   If (FName[I] = '/') Or (FName[I] = '\') Or (FName[I] = ':') Then Begin
-   P := I; Break;
+   DirEnd := I; Break;
   End;
- If P > 0 Then FName := Copy(FName, P + 1, Length(FName) - P);
- { Retire .in.xml ou derniere extension }
- P := Pos('.in.xml', FName);
- If P > 0 Then BaseName := Copy(FName, 1, P - 1)
+ If DirEnd > 0 Then Begin
+  Dir  := Copy(FName, 1, DirEnd);
+  Stem := Copy(FName, DirEnd + 1, Length(FName) - DirEnd);
+ End Else Begin
+  Dir  := '';
+  Stem := FName;
+ End;
+ P := Pos('.in.xml', Stem);
+ If P > 0 Then Stem := Copy(Stem, 1, P - 1)
  Else Begin
   P := 0;
-  For I := Length(FName) DownTo 1 Do
-   If FName[I] = '.' Then Begin P := I; Break; End;
-  If P > 0 Then BaseName := Copy(FName, 1, P - 1) Else BaseName := FName;
+  For I := Length(Stem) DownTo 1 Do
+   If Stem[I] = '.' Then Begin P := I; Break; End;
+  If P > 0 Then Stem := Copy(Stem, 1, P - 1);
  End;
+ BaseName := Dir + Stem;
 End;
 
 Function NowSeconds: LongInt;
@@ -942,7 +948,7 @@ Begin
         'que les mod'+#138+'les d''Ising, XY ou Heisenberg) '+#133,
         ' partir d''un fichier de param'+#138+'tres, afin de calculer ',
         'diverses propri'+#130+'t'+#130+'s physiques comme l'''+#130,'nergie, ',
-        'l''aimantation et la susceptibilit‚ magn‚tique.');
+        'l''aimantation et la susceptibilit'+#130+' magn'+#130+'tique.');
  WriteLn;
  Writeln('Syntaxe : SPINMC [options] fichier.in.xml');
  WriteLn;
