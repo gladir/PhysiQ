@@ -1781,7 +1781,7 @@ End;
 
 Procedure ShowUsage;
 Begin
- WriteLn('OCTOPUS : Cette commande permet de l''analyseur d''entr'+#130+'e Octopus.');
+ WriteLn('OCTOPUS : Cette commande permet de lancer l''analyseur d''entr'+#130+'e Octopus.');
  WriteLn;
  WriteLn('Syntaxe : OCTOPUS [-q] [-e "expr"] [fichier.inp ...]');
  WriteLn;
