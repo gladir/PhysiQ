@@ -202,6 +202,7 @@ Type
  { Particules }
  TParticleKind = (pkElectron, pkPhoton, pkProton, pkAlpha);
 
+ PParticle = ^TParticle;
  TParticle = Record
   Kind       : TParticleKind;
   X, Y, Z    : Real;          { position (cm) }
@@ -214,9 +215,8 @@ Type
   TrackX     : Array[0..MAX_TRACK_POINTS - 1] Of Real;
   TrackY     : Array[0..MAX_TRACK_POINTS - 1] Of Real;
   TrackZ     : Array[0..MAX_TRACK_POINTS - 1] Of Real;
+  Next       : PParticle;
  End;
-
- PParticle = ^TParticle;
 
  { Materiaux }
  TMaterial = Record
@@ -292,8 +292,9 @@ Var
  LastClickTime  : LongInt;
  LastClickBtn   : TMouseButton;
 
- { Simulation }
- Particles      : Array[1..MAX_PARTICLES] Of TParticle;
+ { Simulation : liste chainee des particules }
+ ParticlesHead  : PParticle;
+ ParticlesTail  : PParticle;
  NParticles     : Integer;
  BeamKind       : TParticleKind;
  BeamEnergy     : Real;      { MeV }
@@ -1250,11 +1251,37 @@ Begin
   P.Alive := False;
 End;
 
+Procedure ClearParticles;
+Var P, N: PParticle;
+Begin
+ P := ParticlesHead;
+ While P <> Nil Do Begin
+  N := P^.Next;
+  Dispose(P);
+  P := N;
+ End;
+ ParticlesHead := Nil;
+ ParticlesTail := Nil;
+ NParticles := 0;
+End;
+
+Function AddParticle: PParticle;
+Var P: PParticle;
+Begin
+ New(P);
+ FillChar(P^, SizeOf(P^), 0);
+ P^.Next := Nil;
+ If ParticlesTail = Nil Then ParticlesHead := P
+ Else ParticlesTail^.Next := P;
+ ParticlesTail := P;
+ Inc(NParticles);
+ AddParticle := P;
+End;
+
 Procedure ResetSimulation;
 Var I: Integer;
 Begin
- NParticles := 0;
- For I := 1 To MAX_PARTICLES Do Particles[I].Alive := False;
+ ClearParticles;
  For I := 0 To NHistBins - 1 Do Hist[I] := 0;
  HistMax := 0;
  SimStep := 0;
@@ -1266,6 +1293,7 @@ Var
  I: Integer;
  Theta, M: Real;
  Charge: Integer;
+ P: PParticle;
 Begin
  ResetSimulation;
  Case BeamKind Of
@@ -1277,8 +1305,8 @@ Begin
  Theta := BeamAngleDeg * PHY_PI / 180.0;
  For I := 1 To BeamCount Do Begin
   If NParticles >= MAX_PARTICLES Then Break;
-  Inc(NParticles);
-  With Particles[NParticles] Do Begin
+  P := AddParticle;
+  With P^ Do Begin
    Kind := BeamKind;
    X := -5; Y := 0; Z := 0;
    VX := Cos(Theta); VY := Sin(Theta); VZ := 0;
@@ -1290,7 +1318,7 @@ Begin
    Charge := Charge;
    Alive := True;
    TrackLen := 0;
-   AddTrackPoint(Particles[NParticles]);
+   AddTrackPoint(P^);
   End;
  End;
 End;
@@ -1504,29 +1532,33 @@ End;
 
 Procedure DrawTracks;
 Var
- I, J, SX1, SY1, SX2, SY2: Integer;
+ J, SX1, SY1, SX2, SY2: Integer;
+ P: PParticle;
 Begin
- For I := 1 To NParticles Do Begin
-  If Particles[I].TrackLen < 2 Then Continue;
-  SetColor(ParticleColor(Particles[I].Kind));
-  For J := 1 To Particles[I].TrackLen - 1 Do Begin
-   If ViewMode3D Then Begin
-    Project3D(Particles[I].TrackX[J-1], Particles[I].TrackY[J-1],
-              Particles[I].TrackZ[J-1], SX1, SY1);
-    Project3D(Particles[I].TrackX[J], Particles[I].TrackY[J],
-              Particles[I].TrackZ[J], SX2, SY2);
-   End Else Begin
-    WorldToScreen2D(Particles[I].TrackX[J-1],
-                    Particles[I].TrackY[J-1], SX1, SY1);
-    WorldToScreen2D(Particles[I].TrackX[J],
-                    Particles[I].TrackY[J], SX2, SY2);
+ P := ParticlesHead;
+ While P <> Nil Do Begin
+  If P^.TrackLen >= 2 Then Begin
+   SetColor(ParticleColor(P^.Kind));
+   For J := 1 To P^.TrackLen - 1 Do Begin
+    If ViewMode3D Then Begin
+     Project3D(P^.TrackX[J-1], P^.TrackY[J-1],
+               P^.TrackZ[J-1], SX1, SY1);
+     Project3D(P^.TrackX[J], P^.TrackY[J],
+               P^.TrackZ[J], SX2, SY2);
+    End Else Begin
+     WorldToScreen2D(P^.TrackX[J-1],
+                     P^.TrackY[J-1], SX1, SY1);
+     WorldToScreen2D(P^.TrackX[J],
+                     P^.TrackY[J], SX2, SY2);
+    End;
+    If (SX1 >= VPX1) And (SX1 <= VPX2) And
+       (SX2 >= VPX1) And (SX2 <= VPX2) And
+       (SY1 >= VPY1) And (SY1 <= VPY2) And
+       (SY2 >= VPY1) And (SY2 <= VPY2) Then
+     Line(SX1, SY1, SX2, SY2);
    End;
-   If (SX1 >= VPX1) And (SX1 <= VPX2) And
-      (SX2 >= VPX1) And (SX2 <= VPX2) And
-      (SY1 >= VPY1) And (SY1 <= VPY2) And
-      (SY2 >= VPY1) And (SY2 <= VPY2) Then
-    Line(SX1, SY1, SX2, SY2);
   End;
+  P := P^.Next;
  End;
 End;
 
@@ -1560,7 +1592,7 @@ Begin
 End;
 
 Procedure DrawStatusBar;
-Var S: String; Y: Integer; I, Nalive: Integer;
+Var S: String; Y: Integer; Nalive: Integer; P: PParticle;
 Begin
  Y := SCREEN_H - STATUSBAR_HEIGHT;
  SetFillStyle(SolidFill, CLR_BACKGROUND);
@@ -1569,8 +1601,11 @@ Begin
  Line(0, Y, SCREEN_W - 1, Y);
  SetColor(Black);
  Nalive := 0;
- For I := 1 To NParticles Do
-  If Particles[I].Alive Then Inc(Nalive);
+ P := ParticlesHead;
+ While P <> Nil Do Begin
+  If P^.Alive Then Inc(Nalive);
+  P := P^.Next;
+ End;
  If SimRunning Then S := 'EN COURS' Else S := 'ARRET';
  S := S + '  | Step:' + IntToStr(SimStep) +
    '  N:' + IntToStr(NParticles) +
@@ -3947,6 +3982,7 @@ Var
  NAlive, NStopped: Integer;
  ETot, XMin, XMax, BinW, Xc: Real;
  IoR: Integer;
+ P: PParticle;
 Begin
  Assign(F, FName);
 {$I-} Rewrite(F); {$I+}
@@ -3987,9 +4023,11 @@ Begin
  Writeln(F);
 
  NAlive := 0; NStopped := 0; ETot := 0;
- For I := 1 To NParticles Do Begin
-  If Particles[I].Alive Then Inc(NAlive) Else Inc(NStopped);
-  ETot := ETot + Particles[I].Energy;
+ P := ParticlesHead;
+ While P <> Nil Do Begin
+  If P^.Alive Then Inc(NAlive) Else Inc(NStopped);
+  ETot := ETot + P^.Energy;
+  P := P^.Next;
  End;
 
  Writeln(F, '[Stats]');
@@ -4002,15 +4040,19 @@ Begin
 
  Writeln(F, '[Particles]');
  Writeln(F, '# idx kind energy_MeV alive trackLen X Y Z');
- For I := 1 To NParticles Do Begin
-  Write(F, I:4, ' ', KindToStr(Particles[I].Kind):10, ' ',
-           RealToStr(Particles[I].Energy, 1, 4):10, ' ');
-  If Particles[I].Alive Then Write(F, 'alive   ')
+ P := ParticlesHead;
+ I := 0;
+ While P <> Nil Do Begin
+  Inc(I);
+  Write(F, I:4, ' ', KindToStr(P^.Kind):10, ' ',
+           RealToStr(P^.Energy, 1, 4):10, ' ');
+  If P^.Alive Then Write(F, 'alive   ')
   Else Write(F, 'stopped ');
-  Writeln(F, Particles[I].TrackLen:4, ' ',
-              RealToStr(Particles[I].X, 1, 3), ' ',
-              RealToStr(Particles[I].Y, 1, 3), ' ',
-              RealToStr(Particles[I].Z, 1, 3));
+  Writeln(F, P^.TrackLen:4, ' ',
+              RealToStr(P^.X, 1, 3), ' ',
+              RealToStr(P^.Y, 1, 3), ' ',
+              RealToStr(P^.Z, 1, 3));
+  P := P^.Next;
  End;
  Writeln(F);
 
@@ -4155,7 +4197,7 @@ Begin
 End;
 
 Procedure ExecuteMenuItem(Var Item: TMenuItem);
-Var Cat: Integer;
+Var Cat: Integer; PP: PParticle;
 Begin
  CloseMenuBar;
  Case Item.Tag Of
@@ -4182,9 +4224,11 @@ Begin
    If NParticles = 0 Then SpawnBeam;
    SimRunning := False;
    { Un pas pour toutes les particules vivantes }
-   Cat := 1;
-   For Cat := 1 To NParticles Do
-    If Particles[Cat].Alive Then StepParticle(Particles[Cat]);
+   PP := ParticlesHead;
+   While PP <> Nil Do Begin
+    If PP^.Alive Then StepParticle(PP^);
+    PP := PP^.Next;
+   End;
    Inc(SimStep);
    FullRepaint := True;
   End;
@@ -4295,7 +4339,7 @@ End;
   ============================================================ }
 
 Procedure HandleGlobalKey(Var Ev: TEvent);
-Var I: Integer;
+Var PP: PParticle;
 Begin
  If Ev.Kind = EV_KEY_DOWN Then Begin
   Case Ev.KeyCode Of
@@ -4308,8 +4352,11 @@ Begin
    66: Begin                      { F8 = pas-a-pas }
     If NParticles = 0 Then SpawnBeam;
     SimRunning := False;
-    For I := 1 To NParticles Do
-     If Particles[I].Alive Then StepParticle(Particles[I]);
+    PP := ParticlesHead;
+    While PP <> Nil Do Begin
+     If PP^.Alive Then StepParticle(PP^);
+     PP := PP^.Next;
+    End;
     Inc(SimStep);
     FullRepaint := True;
    End;
@@ -4351,20 +4398,26 @@ End;
   ============================================================ }
 
 Procedure SimulationTick;
-Var I, K: Integer;
+Var K, NAlive: Integer; PP: PParticle;
 Begin
  If Not SimRunning Then Exit;
  For K := 1 To SimSpeed Do Begin
-  For I := 1 To NParticles Do
-   If Particles[I].Alive Then StepParticle(Particles[I]);
+  PP := ParticlesHead;
+  While PP <> Nil Do Begin
+   If PP^.Alive Then StepParticle(PP^);
+   PP := PP^.Next;
+  End;
   Inc(SimStep);
  End;
  NeedRedrawView := True;
  { Auto-arret : aucune particule vivante }
- K := 0;
- For I := 1 To NParticles Do
-  If Particles[I].Alive Then Inc(K);
- If (K = 0) And (NParticles > 0) Then SimRunning := False;
+ NAlive := 0;
+ PP := ParticlesHead;
+ While PP <> Nil Do Begin
+  If PP^.Alive Then Inc(NAlive);
+  PP := PP^.Next;
+ End;
+ If (NAlive = 0) And (NParticles > 0) Then SimRunning := False;
 End;
 
 Var
