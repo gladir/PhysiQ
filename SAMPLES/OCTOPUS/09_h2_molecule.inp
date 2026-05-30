@@ -1,0 +1,42 @@
+# 09_h2_molecule.inp - Exemple realiste : molecule H2
+#
+# Style typique d'un fichier d'entree Octopus pour un calcul DFT
+# sur la molecule de dihydrogene.
+
+CalculationMode    = 1            # gs (etat fondamental)
+Dimensions         = 3
+TheoryLevel        = 4            # DFT
+
+# Espece chimique (Z = 1 pour H)
+%Species
+ "H" | 1 | 0 | 1.00794
+%
+
+# Geometrie : H2 a la distance d'equilibre 0.74 angstrom
+d_HH = 0.74 * angstrom
+
+%Coordinates
+ "H" | -d_HH/2 | 0 | 0
+ "H" |  d_HH/2 | 0 | 0
+%
+
+# Boite de simulation
+Radius   = 5.0  * angstrom
+Spacing  = 0.18 * angstrom
+BoxShape = 2                      # minimum (union de spheres)
+
+# Convergence SCF
+ConvRelDens     = 1e-7
+MaximumIter     = 200
+Mixing          = 0.3
+
+# Sortie
+%Output
+ "density"
+ "wfs"
+ "potential"
+%
+
+print d_HH
+print Radius
+print Spacing

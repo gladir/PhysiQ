@@ -1,0 +1,12 @@
+# 07_include.inp - Inclusion d'un autre fichier
+
+include "SAMPLES/OCTOPUS/defs.inp"
+
+# Les variables de defs.inp sont maintenant disponibles
+print spacing
+print radius
+print ConvCriterion
+
+# On peut les reutiliser dans des calculs
+TotalRadius = radius + 2 * spacing
+print TotalRadius

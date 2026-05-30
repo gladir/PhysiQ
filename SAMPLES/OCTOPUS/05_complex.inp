@@ -1,0 +1,35 @@
+# 05_complex.inp - Arithmetique complexe
+#
+# Litteraux complexes : {partie_reelle, partie_imag}
+# Unite imaginaire prédéfinie : i
+
+z1 = {3, 4}
+z2 = 1 + 2*i           # equivalent a {1, 2}
+
+# Operations
+s = z1 + z2
+p = z1 * z2
+d = z1 / z2
+
+print s
+print p
+print d
+
+# Fonctions sur complexes
+print abs(z1)          # 5
+print abs2(z1)         # 25
+print arg(z1)          # angle en radians
+print conjg(z1)        # {3, -4}
+print realpart(z1)     # 3
+print imagpart(z1)     # 4
+
+# Exponentielle complexe / formule d'Euler
+eipi = exp(i * pi)
+print eipi             # ~ {-1, 0}
+
+# Racine carree d'un nombre negatif
+print sqrt(-1)         # {0, 1}
+
+# Inversion et logarithme complexe
+print inv(z1)
+print log(z1)

@@ -1,0 +1,19 @@
+# 08_env.inp - Variables d'environnement
+#
+# Deux syntaxes :
+#   $NOM                directement
+#   getenv("NOM")       forme fonction
+#
+# Les valeurs non numeriques sont remplacees par 0.
+
+# Exemple : passer un parametre via la variable OCT_NPROC
+NProc = $OCT_NPROC + 0
+print NProc
+
+# Avec getenv
+Temp = getenv("OCT_TEMPERATURE")
+print Temp
+
+# Combinaison conditionnelle : valeur par defaut
+Spacing = $OCT_SPACING * angstrom
+print Spacing

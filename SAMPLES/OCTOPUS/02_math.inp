@@ -1,0 +1,35 @@
+# 02_math.inp - Fonctions mathematiques
+
+# Trigonometrie
+s1 = sin(pi/6)         # = 0.5
+s2 = cos(pi/3)         # = 0.5
+s3 = tan(pi/4)         # = 1
+s4 = asin(0.5)         # = pi/6
+s5 = atan2(1, 1)       # = pi/4
+
+# Exponentielle / logarithme
+e1 = exp(1)            # = e
+e2 = log(e)            # = 1
+e3 = log10(1000)       # = 3
+e4 = logb(8, 2)        # log base 2 de 8 = 3
+
+# Hyperboliques
+h1 = sinh(1)
+h2 = cosh(1)
+h3 = tanh(1)
+h4 = asinh(1)
+
+# Racines, valeur absolue, erf
+r1 = sqrt(2)
+r2 = abs(-3.14)
+r3 = erf(1)            # ~ 0.8427
+
+# Floor / ceiling / step
+f1 = floor(2.7)
+f2 = ceiling(2.3)
+f3 = step(-1)          # = 0
+f4 = step(1)           # = 1
+
+# min / max
+m1 = min(3, 7)
+m2 = max(3, 7)

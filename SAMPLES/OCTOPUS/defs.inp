@@ -1,0 +1,8 @@
+# defs.inp - Definitions partagees (utilise par 07_include.inp)
+
+a_bohr  = 1.0
+spacing = 0.3 * angstrom
+radius  = 5.0 * angstrom
+
+ConvCriterion = 1.0e-6
+MaxIter       = 200

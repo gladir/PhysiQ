@@ -1,0 +1,30 @@
+# 06_blocks.inp - Blocs %nom ... %
+#
+# Un bloc est une matrice : chaque ligne = une rangee, '|' separe les cellules.
+# Le bloc se termine par '%' isole sur sa propre ligne.
+
+# Coordonnees atomiques d'une molecule d'eau (en angstroms)
+%Coordinates
+ "O" |  0.0000 |  0.0000 |  0.1173
+ "H" |  0.0000 |  0.7572 | -0.4692
+ "H" |  0.0000 | -0.7572 | -0.4692
+%
+
+# Maille cristalline cubique simple, parametre 4 angstroms
+a_lat = 4.0 * angstrom
+
+%LatticeVectors
+ a_lat | 0     | 0
+ 0     | a_lat | 0
+ 0     | 0     | a_lat
+%
+
+# Grille de k-points (Monkhorst-Pack)
+%KPointsGrid
+ 4 | 4 | 4
+%
+
+# Affichage
+show Coordinates
+show LatticeVectors
+show KPointsGrid

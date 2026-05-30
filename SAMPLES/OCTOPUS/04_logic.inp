@@ -1,0 +1,28 @@
+# 04_logic.inp - Operateurs logiques et de comparaison
+#
+# Booleens : 0 = faux, tout autre = vrai
+# Operateurs : == != < <= > >=  &&  ||  !
+
+# Comparaisons simples
+c1 = 2 < 3             # 1 (vrai)
+c2 = 5 == 5            # 1
+c3 = 5 != 5            # 0
+c4 = 2 >= 3            # 0
+
+# Logique
+a = true
+b = false
+l1 = a && b            # 0
+l2 = a || b            # 1
+l3 = !a                # 0
+l4 = !(a && b)         # 1
+
+# Selection conditionnelle (style C : a*cond + b*(1-cond))
+x = 7
+y = 3
+maxxy = x*(x>y) + y*(y>=x)
+print maxxy            # 7
+
+# Combinaison
+ok = (x > 0) && (x < 10) && (x != 5)
+print ok               # 1

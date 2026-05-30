@@ -1,0 +1,24 @@
+# 03_units.inp - Constantes physiques (unites atomiques de Hartree)
+#
+# Toutes les constantes prédéfinies sont en u.a. (Hartree, Bohr, etc.)
+# Multiplier une valeur SI par la constante = passage en u.a.
+
+# Longueurs
+L1 = 1.0 * angstrom    # 1 A en bohrs
+L2 = 5.0 * nm          # 5 nm en bohrs
+L3 = 100 * pm          # 100 pm en bohrs
+
+# Energies
+E1 = 13.6057 * eV      # 1 Rydberg ~ 0.5 Hartree
+E2 = 1 * ry            # 1 Rydberg = 0.5 Hartree
+E3 = 300 * kelvin      # kT a 300 K
+E4 = 1 * kjoule_mol    # 1 kJ/mol en Hartree
+E5 = 1 * kcal_mol      # 1 kcal/mol en Hartree
+
+# Temps
+T1 = 1 * fs            # 1 femtoseconde
+T2 = 100 * as          # 100 attosecondes
+T3 = 1 * ps            # 1 picoseconde
+
+# Vitesse de la lumiere (137 u.a.)
+print c

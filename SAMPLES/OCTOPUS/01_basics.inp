@@ -1,0 +1,18 @@
+# 01_basics.inp - Affectations et arithmetique de base
+
+# Affectations simples
+a = 2
+b = 3
+c = a + b
+d = a * b - 1
+e = (a + b) * (a - b)
+f = 2^10
+
+# Division et modulo (entier via floor)
+g = 17 / 4
+h = floor(17 / 4)
+r = 17 - h * 4
+
+# Affichage explicite
+print a + b * c
+print a^b + b^a

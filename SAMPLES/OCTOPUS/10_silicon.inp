@@ -1,0 +1,47 @@
+# 10_silicon.inp - Exemple realiste : cristal de silicium (diamant)
+#
+# Parametre de maille experimental : 5.431 angstrom.
+# Structure diamant = cfc + base (0,0,0) et (1/4,1/4,1/4).
+
+CalculationMode = 1               # gs
+PeriodicDimensions = 3
+TheoryLevel = 4                   # DFT
+
+a = 5.431 * angstrom              # parametre de maille
+ah = a / 2
+
+%Species
+ "Si" | 14 | 0 | 28.0855
+%
+
+# Vecteurs de maille (cfc) en coordonnees cartesiennes
+%LatticeVectors
+ 0  | ah | ah
+ ah | 0  | ah
+ ah | ah | 0
+%
+
+# Base atomique (coordonnees reduites)
+%ReducedCoordinates
+ "Si" | 0.00 | 0.00 | 0.00
+ "Si" | 0.25 | 0.25 | 0.25
+%
+
+# Maillage k-points
+nk = 8
+%KPointsGrid
+ nk | nk | nk
+%
+
+# Coupure / espacement de la grille reelle
+Spacing = 0.20 * angstrom
+
+# Convergence
+ConvRelDens = 1e-6
+MaximumIter = 150
+Smearing    = 0.01 * eV
+
+print a
+print ah
+print Spacing
+print Smearing
