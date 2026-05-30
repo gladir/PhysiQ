@@ -1,6 +1,10 @@
 # PhysiQ
 Liste de commandes écrite en Pascal (Turbo Pascal ou Free Pascal) sur la physique.
 
+Apercu de GEANT4 :
+
+<img width="636" height="478" alt="image" src="https://github.com/user-attachments/assets/4ca6eebd-83a1-407c-8ed1-808966f6fdb4" />
+
 <h2>Liste des fichiers</h2>
 
 Voici la liste des différents fichiers proposés dans PhysiQ :
