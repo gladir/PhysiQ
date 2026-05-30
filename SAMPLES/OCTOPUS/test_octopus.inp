@@ -1,0 +1,51 @@
+# Test du parser Octopus
+# Constantes physiques et arithmetique
+a = 2 + 3
+b = 4 * (5 - 1)
+c = 2^10
+print sqrt(2)
+print sin(pi/4)
+print exp(1) - e
+print log10(1000)
+
+# Conversion d'unites
+energy = 13.6 * eV
+print energy
+length = 5 * angstrom
+print length
+
+# Nombres complexes
+z = {3, 4}
+print abs(z)
+print abs2(z)
+print arg(z)
+print conjg(z)
+print realpart(z)
+print imagpart(z)
+
+# Operateurs logiques
+print 1 < 2
+print (3 == 3) && (4 != 5)
+print !false
+print true || false
+
+# Fonctions trig
+print atan2(1, 1)
+print sinh(1)
+print acosh(2)
+
+# Bloc
+%Coordinates
+ 'H' | 0.0 | 0.0 | 0.0
+ 'O' | 0.0 | 0.0 | 1.0
+%
+
+# Avec expressions dans bloc
+%Lattice
+ 1.0 | 0.0 | 0.0
+ 0.0 | 2*angstrom | 0.0
+ 0.0 | 0.0 | 3
+%
+
+show Coordinates
+list

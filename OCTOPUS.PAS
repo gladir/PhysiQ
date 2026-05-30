@@ -17,8 +17,13 @@
                 Usage : OCTOPUS [-q] [-e expr] [fichier.inp]
                         Sans argument : REPL interactif.
                 Compilation :
-                  fpc -Mtp OCTOPUS.PAS
-                  ou Turbo Pascal 7 : TPC OCTOPUS.PAS
+                  Turbo Pascal 7 : TPC OCTOPUS.PAS
+                  Free Pascal    : fpc -Mtp OCTOPUS.PAS
+
+                NOTE : en Turbo Pascal 7, une fonction ne peut PAS retourner
+                un type Record. Toutes les operations sur TComplex et TToken
+                sont donc declarees comme Procedure avec un parametre Var
+                de sortie.
 }
 
 {$IFDEF FPC}
@@ -114,22 +119,18 @@ Type
   ============================================================ }
 
 Var
- { Liste chainee des variables }
  VarsHead     : PVarNode;
  NVars        : Integer;
 
- { Source courante : liste chainee de lignes, pointeur courant }
  SrcHead      : PLineNode;
  CurLine      : PLineNode;
  CurFile      : String;
  IncludeDepth : Integer;
 
- { Lexer : ligne courante en cours d'analyse }
  LexBuf       : String;
  LexPos       : Integer;
  LexLineNo    : LongInt;
 
- { Lookahead un token }
  HavePeek     : Boolean;
  PeekTok      : TToken;
 
@@ -138,7 +139,7 @@ Var
  ParseErrMsg  : String;
 
 { ============================================================
-  HELPERS STRING (TP n'a ni SysUtils ni AnsiString)
+  HELPERS STRING
   ============================================================ }
 
 Function LowerStr(Const S: String): String;
@@ -175,7 +176,7 @@ Begin
 End;
 
 { ============================================================
-  HELPERS MATH (TP n'a pas Math)
+  HELPERS MATH
   ============================================================ }
 
 Function Sinh(X: TFloat): TFloat;
@@ -232,50 +233,57 @@ End;
 
 { ============================================================
   COMPLEX : OPERATIONS DE BASE
+  Toutes les operations sont des Procedures (TP7 ne permet pas
+  un Record comme type de retour de fonction).
+  Toutes sont sures face a l'aliasing (Z peut = A ou B).
   ============================================================ }
 
-Function CMake(R, I: TFloat): TComplex;
+Procedure CSet(Var Z: TComplex; Re, Im: TFloat);
 Begin
- CMake.re := R;
- CMake.im := I;
+ Z.re := Re;
+ Z.im := Im;
 End;
 
-Function CFromReal(R: TFloat): TComplex;
+Procedure CSetReal(Var Z: TComplex; X: TFloat);
 Begin
- CFromReal.re := R;
- CFromReal.im := 0;
+ Z.re := X;
+ Z.im := 0;
 End;
 
-Function CIsReal(Z: TComplex): Boolean;
+Function CIsReal(Const A: TComplex): Boolean;
 Begin
- CIsReal := Abs(Z.im) < 1E-12 * (1 + Abs(Z.re));
+ CIsReal := Abs(A.im) < 1E-12 * (1 + Abs(A.re));
 End;
 
-Function CAdd(A, B: TComplex): TComplex;
+Procedure CAdd(Const A, B: TComplex; Var Z: TComplex);
 Begin
- CAdd.re := A.re + B.re;
- CAdd.im := A.im + B.im;
+ Z.re := A.re + B.re;
+ Z.im := A.im + B.im;
 End;
 
-Function CSub(A, B: TComplex): TComplex;
+Procedure CSub(Const A, B: TComplex; Var Z: TComplex);
+Var Re, Im: TFloat;
 Begin
- CSub.re := A.re - B.re;
- CSub.im := A.im - B.im;
+ Re := A.re - B.re;
+ Im := A.im - B.im;
+ Z.re := Re; Z.im := Im;
 End;
 
-Function CNeg(A: TComplex): TComplex;
+Procedure CNeg(Const A: TComplex; Var Z: TComplex);
 Begin
- CNeg.re := -A.re;
- CNeg.im := -A.im;
+ Z.re := -A.re;
+ Z.im := -A.im;
 End;
 
-Function CMul(A, B: TComplex): TComplex;
+Procedure CMul(Const A, B: TComplex; Var Z: TComplex);
+Var Re, Im: TFloat;
 Begin
- CMul.re := A.re * B.re - A.im * B.im;
- CMul.im := A.re * B.im + A.im * B.re;
+ Re := A.re * B.re - A.im * B.im;
+ Im := A.re * B.im + A.im * B.re;
+ Z.re := Re; Z.im := Im;
 End;
 
-Function CAbs(A: TComplex): TFloat;
+Function CAbs(Const A: TComplex): TFloat;
 Var X, Y, T: TFloat;
 Begin
  X := Abs(A.re);
@@ -286,63 +294,68 @@ Begin
  CAbs := X * Sqrt(1 + T*T);
 End;
 
-Function CAbs2(A: TComplex): TFloat;
+Function CAbs2(Const A: TComplex): TFloat;
 Begin
  CAbs2 := A.re*A.re + A.im*A.im;
 End;
 
-Function CDiv(A, B: TComplex): TComplex;
-Var R, D: TFloat;
+Procedure CDiv(Const A, B: TComplex; Var Z: TComplex);
+Var R, D, Re, Im: TFloat;
 Begin
  If Abs(B.re) >= Abs(B.im) Then Begin
   R := B.im / B.re;
   D := B.re + R * B.im;
-  CDiv.re := (A.re + R * A.im) / D;
-  CDiv.im := (A.im - R * A.re) / D;
+  Re := (A.re + R * A.im) / D;
+  Im := (A.im - R * A.re) / D;
  End
  Else Begin
   R := B.re / B.im;
   D := B.im + R * B.re;
-  CDiv.re := (A.re * R + A.im) / D;
-  CDiv.im := (A.im * R - A.re) / D;
+  Re := (A.re * R + A.im) / D;
+  Im := (A.im * R - A.re) / D;
  End;
+ Z.re := Re; Z.im := Im;
 End;
 
-Function CConj(A: TComplex): TComplex;
+Procedure CConj(Const A: TComplex; Var Z: TComplex);
 Begin
- CConj.re := A.re;
- CConj.im := -A.im;
+ Z.re := A.re;
+ Z.im := -A.im;
 End;
 
-Function CArg(A: TComplex): TFloat;
+Function CArg(Const A: TComplex): TFloat;
 Begin
  If (A.re = 0) And (A.im = 0) Then CArg := 0
  Else CArg := ArcTan2(A.im, A.re);
 End;
 
-Function CInv(A: TComplex): TComplex;
-Var D: TFloat;
+Procedure CInv(Const A: TComplex; Var Z: TComplex);
+Var D, Re, Im: TFloat;
 Begin
  D := A.re*A.re + A.im*A.im;
- CInv.re :=  A.re / D;
- CInv.im := -A.im / D;
+ Re :=  A.re / D;
+ Im := -A.im / D;
+ Z.re := Re; Z.im := Im;
 End;
 
-Function CExp(A: TComplex): TComplex;
-Var E: TFloat;
+Procedure CExp(Const A: TComplex; Var Z: TComplex);
+Var E, Re, Im: TFloat;
 Begin
  E := Exp(A.re);
- CExp.re := E * Cos(A.im);
- CExp.im := E * Sin(A.im);
+ Re := E * Cos(A.im);
+ Im := E * Sin(A.im);
+ Z.re := Re; Z.im := Im;
 End;
 
-Function CLog(A: TComplex): TComplex;
+Procedure CLog(Const A: TComplex; Var Z: TComplex);
+Var Re, Im: TFloat;
 Begin
- CLog.re := Ln(CAbs(A));
- CLog.im := CArg(A);
+ Re := Ln(CAbs(A));
+ Im := CArg(A);
+ Z.re := Re; Z.im := Im;
 End;
 
-Function CLogAbs(A: TComplex): TFloat;
+Function CLogAbs(Const A: TComplex): TFloat;
 Var X, Y, T: TFloat;
 Begin
  X := Abs(A.re);
@@ -353,247 +366,267 @@ Begin
  CLogAbs := 0.5 * Ln(T);
 End;
 
-Function CPow(A, B: TComplex): TComplex;
-Var L, R: TComplex;
-    IntE: LongInt;
-    Z, Acc: TComplex;
-    Neg: Boolean;
-    N: LongInt;
+Procedure CSqrt(Const A: TComplex; Var Z: TComplex);
+Var R, W, Re, Im: TFloat;
 Begin
  If (A.re = 0) And (A.im = 0) Then Begin
-  If (B.re = 0) And (B.im = 0) Then CPow := CFromReal(1)
-  Else CPow := CFromReal(0);
-  Exit;
- End;
- { Exposant entier reel : exponentiation par carre }
- If CIsReal(B) Then Begin
-  IntE := Round(B.re);
-  If (Abs(B.re - IntE) < 1E-9) And (Abs(IntE) <= 64) Then Begin
-   Neg := IntE < 0;
-   If Neg Then N := -IntE Else N := IntE;
-   Acc := CFromReal(1);
-   Z := A;
-   While N > 0 Do Begin
-    If (N And 1) = 1 Then Acc := CMul(Acc, Z);
-    Z := CMul(Z, Z);
-    N := N Shr 1;
-   End;
-   If Neg Then Acc := CInv(Acc);
-   CPow := Acc;
-   Exit;
-  End;
- End;
- { Cas general : exp(b * log(a)) }
- L := CLog(A);
- R := CMul(B, L);
- CPow := CExp(R);
-End;
-
-Function CSqrt(A: TComplex): TComplex;
-Var R, W: TFloat;
-Begin
- If (A.re = 0) And (A.im = 0) Then Begin
-  CSqrt.re := 0; CSqrt.im := 0; Exit;
+  Z.re := 0; Z.im := 0; Exit;
  End;
  R := CAbs(A);
  W := Sqrt((R + A.re) * 0.5);
  If W = 0 Then Begin
-  CSqrt.re := 0;
-  If A.im >= 0 Then CSqrt.im := Sqrt(R)
-  Else CSqrt.im := -Sqrt(R);
+  Re := 0;
+  If A.im >= 0 Then Im := Sqrt(R)
+  Else Im := -Sqrt(R);
  End
  Else Begin
-  CSqrt.re := W;
-  CSqrt.im := A.im / (2 * W);
+  Re := W;
+  Im := A.im / (2 * W);
  End;
+ Z.re := Re; Z.im := Im;
 End;
 
-Function CSin(A: TComplex): TComplex;
+Procedure CPow(Const A, B: TComplex; Var Z: TComplex);
+Var L, R, ZZ, Acc, BB: TComplex;
+    IntE: LongInt;
+    Neg: Boolean;
+    N: LongInt;
 Begin
- CSin.re := Sin(A.re) * Cosh(A.im);
- CSin.im := Cos(A.re) * Sinh(A.im);
+ If (A.re = 0) And (A.im = 0) Then Begin
+  If (B.re = 0) And (B.im = 0) Then CSetReal(Z, 1)
+  Else CSetReal(Z, 0);
+  Exit;
+ End;
+ BB := B;  { copie locale (B est Const) }
+ If CIsReal(BB) Then Begin
+  IntE := Round(BB.re);
+  If (Abs(BB.re - IntE) < 1E-9) And (Abs(IntE) <= 64) Then Begin
+   Neg := IntE < 0;
+   If Neg Then N := -IntE Else N := IntE;
+   CSetReal(Acc, 1);
+   ZZ := A;
+   While N > 0 Do Begin
+    If (N And 1) = 1 Then CMul(Acc, ZZ, Acc);
+    CMul(ZZ, ZZ, ZZ);
+    N := N Shr 1;
+   End;
+   If Neg Then CInv(Acc, Acc);
+   Z := Acc;
+   Exit;
+  End;
+ End;
+ CLog(A, L);
+ CMul(BB, L, R);
+ CExp(R, Z);
 End;
 
-Function CCos(A: TComplex): TComplex;
+Procedure CSin(Const A: TComplex; Var Z: TComplex);
+Var Re, Im: TFloat;
 Begin
- CCos.re :=  Cos(A.re) * Cosh(A.im);
- CCos.im := -Sin(A.re) * Sinh(A.im);
+ Re := Sin(A.re) * Cosh(A.im);
+ Im := Cos(A.re) * Sinh(A.im);
+ Z.re := Re; Z.im := Im;
 End;
 
-Function CTan(A: TComplex): TComplex;
+Procedure CCos(Const A: TComplex; Var Z: TComplex);
+Var Re, Im: TFloat;
+Begin
+ Re :=  Cos(A.re) * Cosh(A.im);
+ Im := -Sin(A.re) * Sinh(A.im);
+ Z.re := Re; Z.im := Im;
+End;
+
+Procedure CTan(Const A: TComplex; Var Z: TComplex);
 Var S, C: TComplex;
 Begin
- S := CSin(A);
- C := CCos(A);
- CTan := CDiv(S, C);
+ CSin(A, S);
+ CCos(A, C);
+ CDiv(S, C, Z);
 End;
 
-Function CCot(A: TComplex): TComplex;
+Procedure CCot(Const A: TComplex; Var Z: TComplex);
 Var S, C: TComplex;
 Begin
- S := CSin(A);
- C := CCos(A);
- CCot := CDiv(C, S);
+ CSin(A, S);
+ CCos(A, C);
+ CDiv(C, S, Z);
 End;
 
-Function CSec(A: TComplex): TComplex;
+Procedure CSec(Const A: TComplex; Var Z: TComplex);
 Var C: TComplex;
 Begin
- C := CCos(A);
- CSec := CInv(C);
+ CCos(A, C);
+ CInv(C, Z);
 End;
 
-Function CCsc(A: TComplex): TComplex;
+Procedure CCsc(Const A: TComplex; Var Z: TComplex);
 Var S: TComplex;
 Begin
- S := CSin(A);
- CCsc := CInv(S);
+ CSin(A, S);
+ CInv(S, Z);
 End;
 
-Function CSinh(A: TComplex): TComplex;
+Procedure CSinh(Const A: TComplex; Var Z: TComplex);
+Var Re, Im: TFloat;
 Begin
- CSinh.re := Sinh(A.re) * Cos(A.im);
- CSinh.im := Cosh(A.re) * Sin(A.im);
+ Re := Sinh(A.re) * Cos(A.im);
+ Im := Cosh(A.re) * Sin(A.im);
+ Z.re := Re; Z.im := Im;
 End;
 
-Function CCosh(A: TComplex): TComplex;
+Procedure CCosh(Const A: TComplex; Var Z: TComplex);
+Var Re, Im: TFloat;
 Begin
- CCosh.re := Cosh(A.re) * Cos(A.im);
- CCosh.im := Sinh(A.re) * Sin(A.im);
+ Re := Cosh(A.re) * Cos(A.im);
+ Im := Sinh(A.re) * Sin(A.im);
+ Z.re := Re; Z.im := Im;
 End;
 
-Function CTanh(A: TComplex): TComplex;
+Procedure CTanh(Const A: TComplex; Var Z: TComplex);
 Var S, C: TComplex;
 Begin
- S := CSinh(A);
- C := CCosh(A);
- CTanh := CDiv(S, C);
+ CSinh(A, S);
+ CCosh(A, C);
+ CDiv(S, C, Z);
 End;
 
-Function CCoth(A: TComplex): TComplex;
+Procedure CCoth(Const A: TComplex; Var Z: TComplex);
 Var S, C: TComplex;
 Begin
- S := CSinh(A);
- C := CCosh(A);
- CCoth := CDiv(C, S);
+ CSinh(A, S);
+ CCosh(A, C);
+ CDiv(C, S, Z);
 End;
 
-Function CSech(A: TComplex): TComplex;
+Procedure CSech(Const A: TComplex; Var Z: TComplex);
 Var C: TComplex;
 Begin
- C := CCosh(A);
- CSech := CInv(C);
+ CCosh(A, C);
+ CInv(C, Z);
 End;
 
-Function CCsch(A: TComplex): TComplex;
+Procedure CCsch(Const A: TComplex; Var Z: TComplex);
 Var S: TComplex;
 Begin
- S := CSinh(A);
- CCsch := CInv(S);
+ CSinh(A, S);
+ CInv(S, Z);
 End;
 
-Function CASin(A: TComplex): TComplex;
-Var One, Z2, S, IZ, Sum, Lg, Iu: TComplex;
+Procedure CASin(Const A: TComplex; Var Z: TComplex);
+Var One, Z2, S, IZ, Sum, Lg, Iu, NegI: TComplex;
 Begin
- One := CFromReal(1);
- Z2 := CMul(A, A);
- S := CSqrt(CSub(One, Z2));
- Iu := CMake(0, 1);
- IZ := CMul(Iu, A);
- Sum := CAdd(IZ, S);
- Lg := CLog(Sum);
- CASin := CMul(CMake(0, -1), Lg);
+ CSetReal(One, 1);
+ CMul(A, A, Z2);
+ CSub(One, Z2, S);
+ CSqrt(S, S);
+ CSet(Iu, 0, 1);
+ CMul(Iu, A, IZ);
+ CAdd(IZ, S, Sum);
+ CLog(Sum, Lg);
+ CSet(NegI, 0, -1);
+ CMul(NegI, Lg, Z);
 End;
 
-Function CACos(A: TComplex): TComplex;
-Var Pi2: TComplex;
+Procedure CACos(Const A: TComplex; Var Z: TComplex);
+Var Pi2, As1: TComplex;
 Begin
- Pi2 := CFromReal(OCT_PI * 0.5);
- CACos := CSub(Pi2, CASin(A));
+ CSetReal(Pi2, OCT_PI * 0.5);
+ CASin(A, As1);
+ CSub(Pi2, As1, Z);
 End;
 
-Function CATan(A: TComplex): TComplex;
-Var Iu, IZ, U, V, L: TComplex;
+Procedure CATan(Const A: TComplex; Var Z: TComplex);
+Var Iu, IZ, U, V, Q, L, HalfI, One: TComplex;
 Begin
- Iu := CMake(0, 1);
- IZ := CMul(Iu, A);
- U := CSub(CFromReal(1), IZ);
- V := CAdd(CFromReal(1), IZ);
- L := CLog(CDiv(U, V));
- CATan := CMul(CMake(0, 0.5), L);
+ CSet(Iu, 0, 1);
+ CMul(Iu, A, IZ);
+ CSetReal(One, 1);
+ CSub(One, IZ, U);
+ CAdd(One, IZ, V);
+ CDiv(U, V, Q);
+ CLog(Q, L);
+ CSet(HalfI, 0, 0.5);
+ CMul(HalfI, L, Z);
 End;
 
-Function CACot(A: TComplex): TComplex;
+Procedure CACot(Const A: TComplex; Var Z: TComplex);
 Var T: TComplex;
 Begin
  If (A.re = 0) And (A.im = 0) Then Begin
-  CACot := CFromReal(OCT_PI * 0.5);
+  CSetReal(Z, OCT_PI * 0.5);
   Exit;
  End;
- T := CInv(A);
- CACot := CATan(T);
+ CInv(A, T);
+ CATan(T, Z);
 End;
 
-Function CASec(A: TComplex): TComplex;
+Procedure CASec(Const A: TComplex; Var Z: TComplex);
 Var T: TComplex;
 Begin
- T := CInv(A);
- CASec := CACos(T);
+ CInv(A, T);
+ CACos(T, Z);
 End;
 
-Function CACsc(A: TComplex): TComplex;
+Procedure CACsc(Const A: TComplex; Var Z: TComplex);
 Var T: TComplex;
 Begin
- T := CInv(A);
- CACsc := CASin(T);
+ CInv(A, T);
+ CASin(T, Z);
 End;
 
-Function CASinh(A: TComplex): TComplex;
-Var Z2, S: TComplex;
+Procedure CASinh(Const A: TComplex; Var Z: TComplex);
+Var Z2, S, Sum, One: TComplex;
 Begin
- Z2 := CMul(A, A);
- S := CSqrt(CAdd(Z2, CFromReal(1)));
- CASinh := CLog(CAdd(A, S));
+ CMul(A, A, Z2);
+ CSetReal(One, 1);
+ CAdd(Z2, One, S);
+ CSqrt(S, S);
+ CAdd(A, S, Sum);
+ CLog(Sum, Z);
 End;
 
-Function CACosh(A: TComplex): TComplex;
-Var Z2, S: TComplex;
+Procedure CACosh(Const A: TComplex; Var Z: TComplex);
+Var Z2, S, Sum, One: TComplex;
 Begin
- Z2 := CMul(A, A);
- S := CSqrt(CSub(Z2, CFromReal(1)));
- CACosh := CLog(CAdd(A, S));
+ CMul(A, A, Z2);
+ CSetReal(One, 1);
+ CSub(Z2, One, S);
+ CSqrt(S, S);
+ CAdd(A, S, Sum);
+ CLog(Sum, Z);
 End;
 
-Function CATanh(A: TComplex): TComplex;
-Var U, V, Q, L, Half: TComplex;
+Procedure CATanh(Const A: TComplex; Var Z: TComplex);
+Var U, V, Q, L, Half, One: TComplex;
 Begin
- U := CAdd(CFromReal(1), A);
- V := CSub(CFromReal(1), A);
- Q := CDiv(U, V);
- L := CLog(Q);
- Half := CFromReal(0.5);
- CATanh := CMul(Half, L);
+ CSetReal(One, 1);
+ CAdd(One, A, U);
+ CSub(One, A, V);
+ CDiv(U, V, Q);
+ CLog(Q, L);
+ CSetReal(Half, 0.5);
+ CMul(Half, L, Z);
 End;
 
-Function CACoth(A: TComplex): TComplex;
+Procedure CACoth(Const A: TComplex; Var Z: TComplex);
 Var T: TComplex;
 Begin
- T := CInv(A);
- CACoth := CATanh(T);
+ CInv(A, T);
+ CATanh(T, Z);
 End;
 
-Function CASech(A: TComplex): TComplex;
+Procedure CASech(Const A: TComplex; Var Z: TComplex);
 Var T: TComplex;
 Begin
- T := CInv(A);
- CASech := CACosh(T);
+ CInv(A, T);
+ CACosh(T, Z);
 End;
 
-Function CACsch(A: TComplex): TComplex;
+Procedure CACsch(Const A: TComplex; Var Z: TComplex);
 Var T: TComplex;
 Begin
- T := CInv(A);
- CACsch := CASinh(T);
+ CInv(A, T);
+ CASinh(T, Z);
 End;
 
 { Fonction erreur reelle : Abramowitz & Stegun 7.1.26 (~1.5e-7) }
@@ -605,40 +638,47 @@ Const
  A4 = -1.453152027;
  A5 =  1.061405429;
  P5 =  0.3275911;
-Var T, Y, Sgn: TFloat;
+Var T, Y, Sgn, AX: TFloat;
 Begin
- If X < 0 Then Begin Sgn := -1; X := -X; End Else Sgn := 1;
- T := 1.0 / (1.0 + P5 * X);
- Y := 1.0 - (((((A5*T + A4)*T) + A3)*T + A2)*T + A1)*T*Exp(-X*X);
+ AX := X;
+ If AX < 0 Then Begin Sgn := -1; AX := -AX; End Else Sgn := 1;
+ T := 1.0 / (1.0 + P5 * AX);
+ Y := 1.0 - (((((A5*T + A4)*T) + A3)*T + A2)*T + A1)*T*Exp(-AX*AX);
  REerf := Sgn * Y;
 End;
 
-Function CErf(A: TComplex): TComplex;
-Var Z2, Term, Sum, Z: TComplex;
+Procedure CErf(Const A: TComplex; Var Z: TComplex);
+Var Z2, Term, Sum, ZZ: TComplex;
     K: LongInt;
     Fact, Coef: TFloat;
+    Done: Boolean;
 Begin
  If CIsReal(A) Then Begin
-  CErf.re := REerf(A.re);
-  CErf.im := 0;
+  Z.re := REerf(A.re);
+  Z.im := 0;
   Exit;
  End;
- Z := A;
- Z2 := CMul(Z, Z);
- Sum := Z;
- Term := Z;
+ ZZ := A;
+ CMul(ZZ, ZZ, Z2);
+ Sum := ZZ;
+ Term := ZZ;
  Fact := 1;
- For K := 1 To 40 Do Begin
-  Term := CMul(Term, Z2);
-  Term := CMake(-Term.re, -Term.im);
+ Done := False;
+ K := 1;
+ While (K <= 40) And (Not Done) Do Begin
+  CMul(Term, Z2, Term);
+  Term.re := -Term.re;
+  Term.im := -Term.im;
   Fact := Fact * K;
   Coef := 1 / (Fact * (2*K + 1));
-  Sum := CAdd(Sum, CMake(Term.re * Coef, Term.im * Coef));
-  If (Abs(Term.re) + Abs(Term.im)) < 1E-14 Then Break;
+  Sum.re := Sum.re + Term.re * Coef;
+  Sum.im := Sum.im + Term.im * Coef;
+  If (Abs(Term.re) + Abs(Term.im)) < 1E-14 Then Done := True;
+  Inc(K);
  End;
  Coef := 2 / Sqrt(OCT_PI);
- CErf.re := Coef * Sum.re;
- CErf.im := Coef * Sum.im;
+ Z.re := Coef * Sum.re;
+ Z.im := Coef * Sum.im;
 End;
 
 { ============================================================
@@ -686,7 +726,7 @@ Procedure ClearValue(Var V: TValue);
 Begin
  If V.kind = vkBlock Then FreeBlockRows(V.rows);
  V.kind := vkScalar;
- V.s := CFromReal(0);
+ CSetReal(V.s, 0);
  V.rows := Nil;
  V.nrows := 0;
 End;
@@ -697,7 +737,7 @@ Begin
  New(P);
  P^.name := Name;
  P^.value.kind := vkScalar;
- P^.value.s := CFromReal(0);
+ CSetReal(P^.value.s, 0);
  P^.value.rows := Nil;
  P^.value.nrows := 0;
  P^.predefined := False;
@@ -707,7 +747,7 @@ Begin
  NewVar := P;
 End;
 
-Procedure SetScalar(Const Name: String; Z: TComplex; Pre: Boolean);
+Procedure SetScalar(Const Name: String; Const Z: TComplex; Pre: Boolean);
 Var P: PVarNode;
 Begin
  P := FindVar(Name);
@@ -719,8 +759,10 @@ Begin
 End;
 
 Procedure SetReal(Const Name: String; X: TFloat; Pre: Boolean);
+Var Z: TComplex;
 Begin
- SetScalar(Name, CFromReal(X), Pre);
+ CSetReal(Z, X);
+ SetScalar(Name, Z, Pre);
 End;
 
 { ============================================================
@@ -732,7 +774,7 @@ Var Iu: TComplex;
 Begin
  SetReal('pi',          OCT_PI,                True);
  SetReal('e',           OCT_E,                 True);
- Iu := CMake(0, 1);
+ CSet(Iu, 0, 1);
  SetScalar('i',         Iu,                    True);
  SetReal('false',       0,                     True);
  SetReal('no',          0,                     True);
@@ -811,28 +853,23 @@ Begin
  T.line := LexLineNo;
 End;
 
-Function LexNext: TToken;
+Procedure LexNext(Var T: TToken);
 Var Start: Integer;
     S: String;
     Code: Integer;
     C: Char;
-    T: TToken;
 Begin
  SkipSpaces;
  T.line := LexLineNo;
  T.kind := tkEOL;
  T.text := '';
  T.num  := 0;
- If LexPos > Length(LexBuf) Then Begin
-  LexNext := T;
-  Exit;
- End;
+ If LexPos > Length(LexBuf) Then Exit;
  C := LexBuf[LexPos];
 
- { Commentaire # : avale jusqu'a fin de ligne }
+ { Commentaire # }
  If C = '#' Then Begin
   LexPos := Length(LexBuf) + 1;
-  LexNext := T;
   Exit;
  End;
 
@@ -859,7 +896,6 @@ Begin
   MakeTok(T, tkNumber, S);
   Val(S, T.num, Code);
   If Code <> 0 Then RaiseErr('Nombre invalide : ' + S);
-  LexNext := T;
   Exit;
  End;
 
@@ -870,7 +906,6 @@ Begin
    Inc(LexPos);
   S := Copy(LexBuf, Start, LexPos - Start);
   MakeTok(T, tkIdent, S);
-  LexNext := T;
   Exit;
  End;
 
@@ -882,7 +917,6 @@ Begin
    Inc(LexPos);
   S := Copy(LexBuf, Start, LexPos - Start);
   MakeTok(T, tkIdent, '$' + S);
-  LexNext := T;
   Exit;
  End;
 
@@ -896,27 +930,26 @@ Begin
   If (LexPos <= Length(LexBuf)) And (LexBuf[LexPos] = C) Then
    Inc(LexPos);
   MakeTok(T, tkString, S);
-  LexNext := T;
   Exit;
  End;
 
  Case C Of
-  '+': Begin Inc(LexPos); MakeTok(T, tkPlus, '+'); LexNext := T; Exit; End;
-  '-': Begin Inc(LexPos); MakeTok(T, tkMinus, '-'); LexNext := T; Exit; End;
-  '*': Begin Inc(LexPos); MakeTok(T, tkStar, '*'); LexNext := T; Exit; End;
-  '/': Begin Inc(LexPos); MakeTok(T, tkSlash, '/'); LexNext := T; Exit; End;
-  '^': Begin Inc(LexPos); MakeTok(T, tkCaret, '^'); LexNext := T; Exit; End;
-  '(': Begin Inc(LexPos); MakeTok(T, tkLParen, '('); LexNext := T; Exit; End;
-  ')': Begin Inc(LexPos); MakeTok(T, tkRParen, ')'); LexNext := T; Exit; End;
-  ',': Begin Inc(LexPos); MakeTok(T, tkComma, ','); LexNext := T; Exit; End;
-  '{': Begin Inc(LexPos); MakeTok(T, tkLBrace, '{'); LexNext := T; Exit; End;
-  '}': Begin Inc(LexPos); MakeTok(T, tkRBrace, '}'); LexNext := T; Exit; End;
+  '+': Begin Inc(LexPos); MakeTok(T, tkPlus, '+'); Exit; End;
+  '-': Begin Inc(LexPos); MakeTok(T, tkMinus, '-'); Exit; End;
+  '*': Begin Inc(LexPos); MakeTok(T, tkStar, '*'); Exit; End;
+  '/': Begin Inc(LexPos); MakeTok(T, tkSlash, '/'); Exit; End;
+  '^': Begin Inc(LexPos); MakeTok(T, tkCaret, '^'); Exit; End;
+  '(': Begin Inc(LexPos); MakeTok(T, tkLParen, '('); Exit; End;
+  ')': Begin Inc(LexPos); MakeTok(T, tkRParen, ')'); Exit; End;
+  ',': Begin Inc(LexPos); MakeTok(T, tkComma, ','); Exit; End;
+  '{': Begin Inc(LexPos); MakeTok(T, tkLBrace, '{'); Exit; End;
+  '}': Begin Inc(LexPos); MakeTok(T, tkRBrace, '}'); Exit; End;
   '|': Begin
    Inc(LexPos);
    If PeekCh = '|' Then Begin
     Inc(LexPos); MakeTok(T, tkOr, '||');
    End Else MakeTok(T, tkPipe, '|');
-   LexNext := T; Exit;
+   Exit;
   End;
   '&': Begin
    Inc(LexPos);
@@ -926,69 +959,68 @@ Begin
     RaiseErr('Operateur ''&'' isole (utiliser ''&&'')');
     MakeTok(T, tkEOL, '');
    End;
-   LexNext := T; Exit;
+   Exit;
   End;
   '=': Begin
    Inc(LexPos);
    If PeekCh = '=' Then Begin
     Inc(LexPos); MakeTok(T, tkEQ, '==');
    End Else MakeTok(T, tkAssign, '=');
-   LexNext := T; Exit;
+   Exit;
   End;
   '!': Begin
    Inc(LexPos);
    If PeekCh = '=' Then Begin
     Inc(LexPos); MakeTok(T, tkNE, '!=');
    End Else MakeTok(T, tkNot, '!');
-   LexNext := T; Exit;
+   Exit;
   End;
   '<': Begin
    Inc(LexPos);
    If PeekCh = '=' Then Begin
     Inc(LexPos); MakeTok(T, tkLE, '<=');
    End Else MakeTok(T, tkLT, '<');
-   LexNext := T; Exit;
+   Exit;
   End;
   '>': Begin
    Inc(LexPos);
    If PeekCh = '=' Then Begin
     Inc(LexPos); MakeTok(T, tkGE, '>=');
    End Else MakeTok(T, tkGT, '>');
-   LexNext := T; Exit;
+   Exit;
   End;
-  '%': Begin Inc(LexPos); MakeTok(T, tkPercent, '%'); LexNext := T; Exit; End;
+  '%': Begin Inc(LexPos); MakeTok(T, tkPercent, '%'); Exit; End;
  End;
 
  RaiseErr('Caractere invalide : ''' + C + '''');
  Inc(LexPos);
  MakeTok(T, tkEOL, '');
- LexNext := T;
 End;
 
-Procedure LexInitLine(Const S: String; LN: LongInt);
+Procedure LexInitLine(Const S: String; LNo: LongInt);
 Begin
  LexBuf := S;
  LexPos := 1;
- LexLineNo := LN;
+ LexLineNo := LNo;
  HavePeek := False;
 End;
 
-Function NextTok: TToken;
+Procedure NextTok(Var T: TToken);
 Begin
  If HavePeek Then Begin
-  NextTok := PeekTok;
+  T := PeekTok;
   HavePeek := False;
  End
- Else NextTok := LexNext;
+ Else LexNext(T);
 End;
 
-Function PeekTokF: TToken;
+Procedure PeekTokF(Var T: TToken);
 Begin
  If Not HavePeek Then Begin
-  PeekTok := LexNext;
+  LexNext(PeekTok);
   HavePeek := True;
  End;
- PeekTokF := PeekTok;
+ T := PeekTok;
 End;
 
 { ============================================================
@@ -1007,22 +1039,22 @@ End;
               | ident | ident LPAREN args RPAREN
   ============================================================ }
 
-Function ParseExpr: TComplex; Forward;
-Function ParseUnary: TComplex; Forward;
+Procedure ParseExpr(Var R: TComplex); Forward;
+Procedure ParseUnary(Var R: TComplex); Forward;
 
-Function CmpEq(A, B: TComplex): Boolean;
+Function CmpEq(Const A, B: TComplex): Boolean;
 Begin
  CmpEq := (Abs(A.re - B.re) < 1E-9) And (Abs(A.im - B.im) < 1E-9);
 End;
 
-Function ToBool(A: TComplex): Boolean;
+Function ToBool(Const A: TComplex): Boolean;
 Begin
  ToBool := (Abs(A.re) > 1E-12) Or (Abs(A.im) > 1E-12);
 End;
 
-Function FromBool(B: Boolean): TComplex;
+Procedure FromBool(B: Boolean; Var Z: TComplex);
 Begin
- If B Then FromBool := CFromReal(1) Else FromBool := CFromReal(0);
+ If B Then CSetReal(Z, 1) Else CSetReal(Z, 0);
 End;
 
 Function GetEnvVarStr(Const Name: String): String;
@@ -1030,112 +1062,107 @@ Begin
  GetEnvVarStr := GetEnv(Name);
 End;
 
-Function ParseArgs(Var Args: TArgArray; MaxN: Integer): Integer;
-Var N: Integer;
-    T: TToken;
+Procedure ParseArgs(Var Args: TArgArray; MaxN: Integer; Var Cnt: Integer);
+Var T: TToken;
 Begin
- N := 0;
- T := PeekTokF;
- If T.kind = tkRParen Then Begin
-  ParseArgs := 0;
-  Exit;
- End;
+ Cnt := 0;
+ PeekTokF(T);
+ If T.kind = tkRParen Then Exit;
  Repeat
-  If N >= MaxN Then Begin
+  If Cnt >= MaxN Then Begin
    RaiseErr('Trop d''arguments');
-   ParseArgs := N;
    Exit;
   End;
-  Args[N] := ParseExpr;
-  Inc(N);
-  T := PeekTokF;
-  If T.kind = tkComma Then T := NextTok
+  ParseExpr(Args[Cnt]);
+  Inc(Cnt);
+  PeekTokF(T);
+  If T.kind = tkComma Then NextTok(T)
   Else Break;
  Until False;
- ParseArgs := N;
 End;
 
-Function CallBuiltin(Const Name: String;
-                     Var Args: TArgArray;
-                     N: Integer;
-                     Var Found: Boolean): TComplex;
+Procedure CallBuiltin(Const Name: String;
+                      Var Args: TArgArray;
+                      N: Integer;
+                      Var Found: Boolean;
+                      Var R: TComplex);
 Var Lo: String;
     A, U, V: TComplex;
 Begin
  Lo := LowerStr(Name);
  Found := True;
- CallBuiltin := CFromReal(0);
+ CSetReal(R, 0);
 
  If N = 1 Then Begin
   A := Args[0];
-  If Lo = 'sqrt'     Then Begin CallBuiltin := CSqrt(A); Exit; End;
-  If Lo = 'exp'      Then Begin CallBuiltin := CExp(A); Exit; End;
-  If (Lo = 'log') Or (Lo = 'ln') Then Begin CallBuiltin := CLog(A); Exit; End;
+  If Lo = 'sqrt'     Then Begin CSqrt(A, R); Exit; End;
+  If Lo = 'exp'      Then Begin CExp(A, R); Exit; End;
+  If (Lo = 'log') Or (Lo = 'ln') Then Begin CLog(A, R); Exit; End;
   If Lo = 'log10' Then Begin
-   U := CLog(A);
-   V := CFromReal(1/Ln(10));
-   CallBuiltin := CMul(U, V); Exit;
+   CLog(A, U);
+   CSetReal(V, 1/Ln(10));
+   CMul(U, V, R); Exit;
   End;
-  If Lo = 'arg'      Then Begin CallBuiltin := CFromReal(CArg(A)); Exit; End;
-  If Lo = 'abs'      Then Begin CallBuiltin := CFromReal(CAbs(A)); Exit; End;
-  If Lo = 'abs2'     Then Begin CallBuiltin := CFromReal(CAbs2(A)); Exit; End;
-  If Lo = 'logabs'   Then Begin CallBuiltin := CFromReal(CLogAbs(A)); Exit; End;
-  If Lo = 'conjg'    Then Begin CallBuiltin := CConj(A); Exit; End;
-  If Lo = 'inv'      Then Begin CallBuiltin := CInv(A); Exit; End;
-  If Lo = 'sin'      Then Begin CallBuiltin := CSin(A); Exit; End;
-  If Lo = 'cos'      Then Begin CallBuiltin := CCos(A); Exit; End;
-  If Lo = 'tan'      Then Begin CallBuiltin := CTan(A); Exit; End;
-  If Lo = 'cot'      Then Begin CallBuiltin := CCot(A); Exit; End;
-  If Lo = 'sec'      Then Begin CallBuiltin := CSec(A); Exit; End;
-  If Lo = 'csc'      Then Begin CallBuiltin := CCsc(A); Exit; End;
-  If Lo = 'asin'     Then Begin CallBuiltin := CASin(A); Exit; End;
-  If Lo = 'acos'     Then Begin CallBuiltin := CACos(A); Exit; End;
-  If Lo = 'atan'     Then Begin CallBuiltin := CATan(A); Exit; End;
-  If Lo = 'acot'     Then Begin CallBuiltin := CACot(A); Exit; End;
-  If Lo = 'asec'     Then Begin CallBuiltin := CASec(A); Exit; End;
-  If Lo = 'acsc'     Then Begin CallBuiltin := CACsc(A); Exit; End;
-  If Lo = 'sinh'     Then Begin CallBuiltin := CSinh(A); Exit; End;
-  If Lo = 'cosh'     Then Begin CallBuiltin := CCosh(A); Exit; End;
-  If Lo = 'tanh'     Then Begin CallBuiltin := CTanh(A); Exit; End;
-  If Lo = 'coth'     Then Begin CallBuiltin := CCoth(A); Exit; End;
-  If Lo = 'sech'     Then Begin CallBuiltin := CSech(A); Exit; End;
-  If Lo = 'csch'     Then Begin CallBuiltin := CCsch(A); Exit; End;
-  If Lo = 'asinh'    Then Begin CallBuiltin := CASinh(A); Exit; End;
-  If Lo = 'acosh'    Then Begin CallBuiltin := CACosh(A); Exit; End;
-  If Lo = 'atanh'    Then Begin CallBuiltin := CATanh(A); Exit; End;
-  If Lo = 'acoth'    Then Begin CallBuiltin := CACoth(A); Exit; End;
-  If Lo = 'asech'    Then Begin CallBuiltin := CASech(A); Exit; End;
-  If Lo = 'acsch'    Then Begin CallBuiltin := CACsch(A); Exit; End;
+  If Lo = 'arg'      Then Begin CSetReal(R, CArg(A)); Exit; End;
+  If Lo = 'abs'      Then Begin CSetReal(R, CAbs(A)); Exit; End;
+  If Lo = 'abs2'     Then Begin CSetReal(R, CAbs2(A)); Exit; End;
+  If Lo = 'logabs'   Then Begin CSetReal(R, CLogAbs(A)); Exit; End;
+  If Lo = 'conjg'    Then Begin CConj(A, R); Exit; End;
+  If Lo = 'inv'      Then Begin CInv(A, R); Exit; End;
+  If Lo = 'sin'      Then Begin CSin(A, R); Exit; End;
+  If Lo = 'cos'      Then Begin CCos(A, R); Exit; End;
+  If Lo = 'tan'      Then Begin CTan(A, R); Exit; End;
+  If Lo = 'cot'      Then Begin CCot(A, R); Exit; End;
+  If Lo = 'sec'      Then Begin CSec(A, R); Exit; End;
+  If Lo = 'csc'      Then Begin CCsc(A, R); Exit; End;
+  If Lo = 'asin'     Then Begin CASin(A, R); Exit; End;
+  If Lo = 'acos'     Then Begin CACos(A, R); Exit; End;
+  If Lo = 'atan'     Then Begin CATan(A, R); Exit; End;
+  If Lo = 'acot'     Then Begin CACot(A, R); Exit; End;
+  If Lo = 'asec'     Then Begin CASec(A, R); Exit; End;
+  If Lo = 'acsc'     Then Begin CACsc(A, R); Exit; End;
+  If Lo = 'sinh'     Then Begin CSinh(A, R); Exit; End;
+  If Lo = 'cosh'     Then Begin CCosh(A, R); Exit; End;
+  If Lo = 'tanh'     Then Begin CTanh(A, R); Exit; End;
+  If Lo = 'coth'     Then Begin CCoth(A, R); Exit; End;
+  If Lo = 'sech'     Then Begin CSech(A, R); Exit; End;
+  If Lo = 'csch'     Then Begin CCsch(A, R); Exit; End;
+  If Lo = 'asinh'    Then Begin CASinh(A, R); Exit; End;
+  If Lo = 'acosh'    Then Begin CACosh(A, R); Exit; End;
+  If Lo = 'atanh'    Then Begin CATanh(A, R); Exit; End;
+  If Lo = 'acoth'    Then Begin CACoth(A, R); Exit; End;
+  If Lo = 'asech'    Then Begin CASech(A, R); Exit; End;
+  If Lo = 'acsch'    Then Begin CACsch(A, R); Exit; End;
   If Lo = 'step' Then Begin
-   If A.re > 0 Then CallBuiltin := CFromReal(1)
-   Else If A.re < 0 Then CallBuiltin := CFromReal(0)
-   Else CallBuiltin := CFromReal(0.5);
+   If A.re > 0 Then CSetReal(R, 1)
+   Else If A.re < 0 Then CSetReal(R, 0)
+   Else CSetReal(R, 0.5);
    Exit;
   End;
-  If Lo = 'erf'      Then Begin CallBuiltin := CErf(A); Exit; End;
-  If Lo = 'realpart' Then Begin CallBuiltin := CFromReal(A.re); Exit; End;
-  If Lo = 'imagpart' Then Begin CallBuiltin := CFromReal(A.im); Exit; End;
-  If Lo = 'floor'    Then Begin CallBuiltin := CFromReal(FloorF(A.re)); Exit; End;
-  If Lo = 'ceiling'  Then Begin CallBuiltin := CFromReal(CeilF(A.re)); Exit; End;
+  If Lo = 'erf'      Then Begin CErf(A, R); Exit; End;
+  If Lo = 'realpart' Then Begin CSetReal(R, A.re); Exit; End;
+  If Lo = 'imagpart' Then Begin CSetReal(R, A.im); Exit; End;
+  If Lo = 'floor'    Then Begin CSetReal(R, FloorF(A.re)); Exit; End;
+  If Lo = 'ceiling'  Then Begin CSetReal(R, CeilF(A.re)); Exit; End;
  End;
 
  If N = 2 Then Begin
   If Lo = 'logb' Then Begin
-   U := CLog(Args[0]);
-   V := CLog(Args[1]);
-   CallBuiltin := CDiv(U, V); Exit;
+   CLog(Args[0], U);
+   CLog(Args[1], V);
+   CDiv(U, V, R); Exit;
   End;
   If Lo = 'atan2' Then Begin
-   CallBuiltin := CFromReal(ArcTan2(Args[1].re, Args[0].re)); Exit;
+   CSetReal(R, ArcTan2(Args[1].re, Args[0].re)); Exit;
   End;
   If Lo = 'min' Then Begin
-   If Args[0].re <= Args[1].re Then CallBuiltin := Args[0]
-   Else CallBuiltin := Args[1];
+   If Args[0].re <= Args[1].re Then R := Args[0]
+   Else R := Args[1];
    Exit;
   End;
   If Lo = 'max' Then Begin
-   If Args[0].re >= Args[1].re Then CallBuiltin := Args[0]
-   Else CallBuiltin := Args[1];
+   If Args[0].re >= Args[1].re Then R := Args[0]
+   Else R := Args[1];
    Exit;
   End;
  End;
@@ -1143,22 +1170,22 @@ Begin
  Found := False;
 End;
 
-Function GetVarScalar(Const Name: String; Var OK: Boolean): TComplex;
+Procedure GetVarScalar(Const Name: String; Var R: TComplex; Var OK: Boolean);
 Var P: PVarNode;
 Begin
  OK := False;
- GetVarScalar := CFromReal(0);
+ CSetReal(R, 0);
  P := FindVar(Name);
  If P = Nil Then Exit;
  If P^.value.kind <> vkScalar Then Exit;
- GetVarScalar := P^.value.s;
+ R := P^.value.s;
  OK := True;
 End;
 
 Function ParseStringTok: String;
 Var T: TToken;
 Begin
- T := NextTok;
+ NextTok(T);
  If T.kind <> tkString Then Begin
   RaiseErr('Chaine attendue');
   ParseStringTok := '';
@@ -1167,37 +1194,37 @@ Begin
  ParseStringTok := T.text;
 End;
 
-Function ParsePrimary: TComplex;
+Procedure ParsePrimary(Var R: TComplex);
 Var T, T2: TToken;
     Re, Im: TComplex;
     Args: TArgArray;
     N: Integer;
     Found, OK: Boolean;
     Name, EnvName, EnvVal: String;
-    R: TFloat;
+    Rl: TFloat;
     Code: Integer;
 Begin
- T := NextTok;
- ParsePrimary := CFromReal(0);
+ NextTok(T);
+ CSetReal(R, 0);
  Case T.kind Of
   tkNumber: Begin
-   ParsePrimary := CFromReal(T.num);
+   CSetReal(R, T.num);
    Exit;
   End;
   tkLParen: Begin
-   ParsePrimary := ParseExpr;
-   T := NextTok;
+   ParseExpr(R);
+   NextTok(T);
    If T.kind <> tkRParen Then RaiseErr('")" attendu');
    Exit;
   End;
   tkLBrace: Begin
-   Re := ParseExpr;
-   T := NextTok;
+   ParseExpr(Re);
+   NextTok(T);
    If T.kind <> tkComma Then RaiseErr('"," attendu dans {x,y}');
-   Im := ParseExpr;
-   T := NextTok;
+   ParseExpr(Im);
+   NextTok(T);
    If T.kind <> tkRBrace Then RaiseErr('"}" attendu');
-   ParsePrimary := CMake(Re.re, Im.re);
+   CSet(R, Re.re, Im.re);
    Exit;
   End;
   tkIdent: Begin
@@ -1205,33 +1232,31 @@ Begin
    If (Length(Name) > 0) And (Name[1] = '$') Then Begin
     EnvName := Copy(Name, 2, Length(Name) - 1);
     EnvVal := GetEnvVarStr(EnvName);
-    Val(EnvVal, R, Code);
-    If Code = 0 Then ParsePrimary := CFromReal(R)
-    Else ParsePrimary := CFromReal(0);
+    Val(EnvVal, Rl, Code);
+    If Code = 0 Then CSetReal(R, Rl);
     Exit;
    End;
-   T2 := PeekTokF;
+   PeekTokF(T2);
    If T2.kind = tkLParen Then Begin
-    T2 := NextTok;
+    NextTok(T2);
     If LowerStr(Name) = 'getenv' Then Begin
      EnvName := ParseStringTok;
-     T2 := NextTok;
+     NextTok(T2);
      If T2.kind <> tkRParen Then RaiseErr('")" attendu apres getenv');
      EnvVal := GetEnvVarStr(EnvName);
-     Val(EnvVal, R, Code);
-     If Code = 0 Then ParsePrimary := CFromReal(R)
-     Else ParsePrimary := CFromReal(0);
+     Val(EnvVal, Rl, Code);
+     If Code = 0 Then CSetReal(R, Rl);
      Exit;
     End;
-    N := ParseArgs(Args, MAX_ARGS);
-    T2 := NextTok;
+    ParseArgs(Args, MAX_ARGS, N);
+    NextTok(T2);
     If T2.kind <> tkRParen Then RaiseErr('")" attendu apres arguments');
-    ParsePrimary := CallBuiltin(Name, Args, N, Found);
+    CallBuiltin(Name, Args, N, Found, R);
     If Not Found Then
      RaiseErr('Fonction inconnue ou mauvais nombre d''arguments : ' + Name);
     Exit;
    End;
-   ParsePrimary := GetVarScalar(Name, OK);
+   GetVarScalar(Name, R, OK);
    If Not OK Then RaiseErr('Variable non definie : ' + Name);
    Exit;
   End;
@@ -1239,153 +1264,160 @@ Begin
  RaiseErr('Expression attendue (token : ' + T.text + ')');
 End;
 
-Function ParseUnary: TComplex;
+Procedure ParseUnary(Var R: TComplex);
 Var T: TToken;
     V: TComplex;
 Begin
- T := PeekTokF;
+ PeekTokF(T);
  If T.kind = tkMinus Then Begin
-  T := NextTok;
-  V := ParseUnary;
-  ParseUnary := CNeg(V);
+  NextTok(T);
+  ParseUnary(V);
+  CNeg(V, R);
   Exit;
  End;
  If T.kind = tkPlus Then Begin
-  T := NextTok;
-  V := ParseUnary;
-  ParseUnary := V;
+  NextTok(T);
+  ParseUnary(R);
   Exit;
  End;
  If T.kind = tkNot Then Begin
-  T := NextTok;
-  V := ParseUnary;
-  ParseUnary := FromBool(Not ToBool(V));
+  NextTok(T);
+  ParseUnary(V);
+  FromBool(Not ToBool(V), R);
   Exit;
  End;
- ParseUnary := ParsePrimary;
+ ParsePrimary(R);
 End;
 
-Function ParsePow: TComplex;
+Procedure ParsePow(Var Z: TComplex);
 Var L, R: TComplex;
     T: TToken;
 Begin
- L := ParseUnary;
- T := PeekTokF;
+ ParseUnary(L);
+ PeekTokF(T);
  If T.kind = tkCaret Then Begin
-  T := NextTok;
-  R := ParsePow;
-  ParsePow := CPow(L, R);
+  NextTok(T);
+  ParsePow(R);
+  CPow(L, R, Z);
   Exit;
  End;
- ParsePow := L;
+ Z := L;
 End;
 
-Function ParseMul: TComplex;
+Procedure ParseMul(Var Z: TComplex);
 Var L, R: TComplex;
     T: TToken;
+    Loop: Boolean;
 Begin
- L := ParsePow;
- Repeat
-  T := PeekTokF;
+ ParsePow(L);
+ Loop := True;
+ While Loop Do Begin
+  PeekTokF(T);
   If T.kind = tkStar Then Begin
-   T := NextTok;
-   R := ParsePow;
-   L := CMul(L, R);
+   NextTok(T);
+   ParsePow(R);
+   CMul(L, R, L);
   End
   Else If T.kind = tkSlash Then Begin
-   T := NextTok;
-   R := ParsePow;
-   L := CDiv(L, R);
+   NextTok(T);
+   ParsePow(R);
+   CDiv(L, R, L);
   End
-  Else Break;
- Until False;
- ParseMul := L;
+  Else Loop := False;
+ End;
+ Z := L;
 End;
 
-Function ParseAdd: TComplex;
+Procedure ParseAdd(Var Z: TComplex);
 Var L, R: TComplex;
     T: TToken;
+    Loop: Boolean;
 Begin
- L := ParseMul;
- Repeat
-  T := PeekTokF;
+ ParseMul(L);
+ Loop := True;
+ While Loop Do Begin
+  PeekTokF(T);
   If T.kind = tkPlus Then Begin
-   T := NextTok;
-   R := ParseMul;
-   L := CAdd(L, R);
+   NextTok(T);
+   ParseMul(R);
+   CAdd(L, R, L);
   End
   Else If T.kind = tkMinus Then Begin
-   T := NextTok;
-   R := ParseMul;
-   L := CSub(L, R);
+   NextTok(T);
+   ParseMul(R);
+   CSub(L, R, L);
   End
-  Else Break;
- Until False;
- ParseAdd := L;
+  Else Loop := False;
+ End;
+ Z := L;
 End;
 
-Function ParseCmp: TComplex;
+Procedure ParseCmp(Var Z: TComplex);
 Var L, R: TComplex;
     T: TToken;
     K: TTokenKind;
 Begin
- L := ParseAdd;
- T := PeekTokF;
+ ParseAdd(L);
+ PeekTokF(T);
  If (T.kind = tkLT) Or (T.kind = tkLE) Or (T.kind = tkGT) Or
     (T.kind = tkGE) Or (T.kind = tkEQ) Or (T.kind = tkNE) Then Begin
   K := T.kind;
-  T := NextTok;
-  R := ParseAdd;
+  NextTok(T);
+  ParseAdd(R);
   Case K Of
-   tkLT: ParseCmp := FromBool(L.re <  R.re);
-   tkLE: ParseCmp := FromBool(L.re <= R.re);
-   tkGT: ParseCmp := FromBool(L.re >  R.re);
-   tkGE: ParseCmp := FromBool(L.re >= R.re);
-   tkEQ: ParseCmp := FromBool(CmpEq(L, R));
-   tkNE: ParseCmp := FromBool(Not CmpEq(L, R));
+   tkLT: FromBool(L.re <  R.re, Z);
+   tkLE: FromBool(L.re <= R.re, Z);
+   tkGT: FromBool(L.re >  R.re, Z);
+   tkGE: FromBool(L.re >= R.re, Z);
+   tkEQ: FromBool(CmpEq(L, R), Z);
+   tkNE: FromBool(Not CmpEq(L, R), Z);
   End;
   Exit;
  End;
- ParseCmp := L;
+ Z := L;
 End;
 
-Function ParseAnd: TComplex;
+Procedure ParseAnd(Var Z: TComplex);
 Var L, R: TComplex;
     T: TToken;
+    Loop: Boolean;
 Begin
- L := ParseCmp;
- Repeat
-  T := PeekTokF;
+ ParseCmp(L);
+ Loop := True;
+ While Loop Do Begin
+  PeekTokF(T);
   If T.kind = tkAnd Then Begin
-   T := NextTok;
-   R := ParseCmp;
-   L := FromBool(ToBool(L) And ToBool(R));
+   NextTok(T);
+   ParseCmp(R);
+   FromBool(ToBool(L) And ToBool(R), L);
   End
-  Else Break;
- Until False;
- ParseAnd := L;
+  Else Loop := False;
+ End;
+ Z := L;
 End;
 
-Function ParseOr: TComplex;
+Procedure ParseOr(Var Z: TComplex);
 Var L, R: TComplex;
     T: TToken;
+    Loop: Boolean;
 Begin
- L := ParseAnd;
- Repeat
-  T := PeekTokF;
+ ParseAnd(L);
+ Loop := True;
+ While Loop Do Begin
+  PeekTokF(T);
   If T.kind = tkOr Then Begin
-   T := NextTok;
-   R := ParseAnd;
-   L := FromBool(ToBool(L) Or ToBool(R));
+   NextTok(T);
+   ParseAnd(R);
+   FromBool(ToBool(L) Or ToBool(R), L);
   End
-  Else Break;
- Until False;
- ParseOr := L;
+  Else Loop := False;
+ End;
+ Z := L;
 End;
 
-Function ParseExpr: TComplex;
+Procedure ParseExpr(Var R: TComplex);
 Begin
- ParseExpr := ParseOr;
+ ParseOr(R);
 End;
 
 { ============================================================
@@ -1399,7 +1431,7 @@ Begin
  FormatFloat10 := S;
 End;
 
-Function FormatComplex(Z: TComplex): String;
+Function FormatComplex(Const Z: TComplex): String;
 Var Re, AbsIm, Im: String;
 Begin
  If CIsReal(Z) Then FormatComplex := FormatFloat10(Z.re)
@@ -1436,7 +1468,7 @@ Begin
 End;
 
 { ============================================================
-  LECTURE DE FICHIER : liste chainee
+  LECTURE DE FICHIER
   ============================================================ }
 
 Function LoadFileList(Const Fn: String; Var Head: PLineNode): Boolean;
@@ -1512,40 +1544,40 @@ Begin
  CurFile := SavedFile;
 End;
 
-{ Parse une ligne de bloc : expr | expr | expr ...
-  Retourne le nombre de cellules lues dans Row^. }
+{ Parse une ligne de bloc. Retourne le nb de cellules lues. }
 Function ParseBlockRowLine(Row: PBlockRow): Integer;
 Var N: Integer;
     T: TToken;
     V: TComplex;
+    Done: Boolean;
 Begin
  N := 0;
- Repeat
-  T := PeekTokF;
-  If T.kind = tkEOL Then Break;
+ Done := False;
+ While Not Done Do Begin
+  PeekTokF(T);
+  If T.kind = tkEOL Then Begin Done := True; Continue; End;
   If T.kind = tkString Then Begin
-   T := NextTok;
-   V := CFromReal(0);
+   NextTok(T);
+   CSetReal(V, 0);
   End
   Else Begin
-   V := ParseExpr;
-   If ParseError Then Break;
+   ParseExpr(V);
+   If ParseError Then Begin Done := True; Continue; End;
   End;
   If N >= MAX_BLOCK_COLS Then Begin
    RaiseErr('Trop de colonnes dans bloc (max ' + IntStr(MAX_BLOCK_COLS) + ')');
-   Break;
+   Done := True; Continue;
   End;
   Inc(N);
   Row^.cell[N] := V;
-  T := PeekTokF;
-  If T.kind = tkPipe Then T := NextTok
-  Else Break;
- Until False;
+  PeekTokF(T);
+  If T.kind = tkPipe Then NextTok(T)
+  Else Done := True;
+ End;
  Row^.ncols := N;
  ParseBlockRowLine := N;
 End;
 
-{ Lit le contenu d'un bloc et l'assigne. Avance CurLine. }
 Procedure EvalBlock(Const BlockName: String);
 Var Head, Tail, Row: PBlockRow;
     NRows: Integer;
@@ -1562,12 +1594,11 @@ Begin
   LexInitLine(CurLine^.txt, CurLine^.num);
   CurLine := CurLine^.next;
 
-  T := PeekTokF;
+  PeekTokF(T);
   If T.kind = tkEOL Then Continue;
 
-  { Fin de bloc : '%' isole ou '%' suivi du nom }
   If T.kind = tkPercent Then Begin
-   T := NextTok;
+   NextTok(T);
    EndFound := True;
    Continue;
   End;
@@ -1585,7 +1616,6 @@ Begin
   If ParseError Then Exit;
  End;
 
- { Stockage }
  P := FindVar(BlockName);
  If P = Nil Then P := NewVar(BlockName);
  ClearValue(P^.value);
@@ -1604,13 +1634,13 @@ Var T, T2: TToken;
     V: TComplex;
     P: PVarNode;
 Begin
- T := PeekTokF;
+ PeekTokF(T);
  If T.kind = tkEOL Then Exit;
 
  { Bloc : %nom ... % }
  If T.kind = tkPercent Then Begin
-  T := NextTok;
-  T := NextTok;
+  NextTok(T);
+  NextTok(T);
   If T.kind <> tkIdent Then Begin
    RaiseErr('Nom de bloc attendu apres ''%''');
    Exit;
@@ -1626,8 +1656,8 @@ Begin
  End;
 
  If StrEqI(T.text, 'include') Then Begin
-  T := NextTok;
-  T := NextTok;
+  NextTok(T);
+  NextTok(T);
   If T.kind <> tkString Then Begin
    RaiseErr('Chaine attendue apres include');
    Exit;
@@ -1638,15 +1668,15 @@ Begin
  End;
 
  If StrEqI(T.text, 'print') Then Begin
-  T := NextTok;
-  V := ParseExpr;
+  NextTok(T);
+  ParseExpr(V);
   If Not ParseError Then WriteLn(FormatComplex(V));
   Exit;
  End;
 
  If StrEqI(T.text, 'show') Then Begin
-  T := NextTok;
-  T := NextTok;
+  NextTok(T);
+  NextTok(T);
   If T.kind <> tkIdent Then Begin
    RaiseErr('Nom de variable attendu apres show');
    Exit;
@@ -1658,12 +1688,12 @@ Begin
  End;
 
  If StrEqI(T.text, 'quit') Or StrEqI(T.text, 'exit') Then Begin
-  T := NextTok;
+  NextTok(T);
   Halt(0);
  End;
 
  If StrEqI(T.text, 'list') Then Begin
-  T := NextTok;
+  NextTok(T);
   P := VarsHead;
   While P <> Nil Do Begin
    If Not P^.predefined Then PrintValue(P^.name, P^.value);
@@ -1673,14 +1703,14 @@ Begin
  End;
 
  { Affectation : ident = expr }
- T := NextTok;
+ NextTok(T);
  Name := T.text;
- T2 := NextTok;
+ NextTok(T2);
  If T2.kind <> tkAssign Then Begin
   RaiseErr('"=" attendu apres ' + Name);
   Exit;
  End;
- V := ParseExpr;
+ ParseExpr(V);
  If ParseError Then Exit;
  SetScalar(Name, V, False);
  If Not Quiet Then
@@ -1751,7 +1781,7 @@ End;
 
 Procedure ShowUsage;
 Begin
- WriteLn('OCTOPUS : Cette commande permet de l''analyseur d''entr‚e Octopus.');
+ WriteLn('OCTOPUS : Cette commande permet de l''analyseur d''entr'+#130+'e Octopus.');
  WriteLn;
  WriteLn('Syntaxe : OCTOPUS [-q] [-e "expr"] [fichier.inp ...]');
  WriteLn;
