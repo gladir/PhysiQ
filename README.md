@@ -34,6 +34,10 @@ Voici la liste des différents fichiers proposés dans PhysiQ :
 		<td><b>OCTOPUS.PAS</b></td>
 		<td>Cette commande permet de lancer l'analyseur d'entrée Octopus.</td>
 	</tr>
+	<tr>
+		<td><b>SPINMC.PAS</b></td>
+		<td>Cette commande permet d'exécuter une simulation Monte-Carlo de systèmes de spins (tels que les modèles d'Ising, XY ou Heisenberg) à partir d'un fichier de paramètres, afin de calculer diverses propriétés physiques comme l'énergie, l'aimantation et la susceptibilité magnétique.</td>
+	</tr>
 	</table>
 
 <h2>Compilation</h2>
