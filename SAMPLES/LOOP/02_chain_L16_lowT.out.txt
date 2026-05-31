@@ -1,0 +1,27 @@
+# LOOP v1.00 - resultats QMC (SSE)
+# date  : 2026
+# input : SAMPLES\LOOP\02_chain_L16_lowT.parm
+# modele: Heisenberg AFM isotrope S=1/2
+
+[Parameters]
+LATTICE        = "chain lattice"
+MODEL          = "spin"
+local_S        = "1/2"
+L              = 16
+T              = 0.100000
+J              = 1.000000
+THERMALIZATION = 5000
+SWEEPS         = 20000
+SEED           = 7
+NSites         = 16
+NBonds         = 16
+NBins          = 32
+MCur (final)   = 202
+
+[Observables]
+Energy/site       =    -0.44330781 +/- 0.00049265
+SpecificHeat/site =     0.10121137 +/- 0.06926327
+<m_z^2>/site      =     0.00791563 +/- 0.00024814
+<m_stag^2>/site   =     1.03864063 +/- 0.00783279
+Susceptibility_u  =     0.07915625 +/- 0.00248143
+Susceptibility_s  =    10.38640625 +/- 0.07832790

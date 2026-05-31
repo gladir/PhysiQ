@@ -1,0 +1,13 @@
+{ Heisenberg AFM S=1/2, chaine 1D L=8, T=2.0
+  Regime haute temperature.
+  E/site -> 0 quand T -> infini.
+  Chaleur specifique C/site faible. }
+LATTICE="chain lattice"
+MODEL="spin"
+local_S=1/2
+L=8
+T=2.0
+J=1
+THERMALIZATION=1000
+SWEEPS=5000
+SEED=1234

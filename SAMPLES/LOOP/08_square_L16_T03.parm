@@ -1,0 +1,14 @@
+{ Heisenberg AFM S=1/2, reseau carre 2D 16x16, T=0.3
+  Systeme plus grand pour observer mieux la limite
+  thermodynamique. Couteux en temps CPU.
+  E/site doit converger vers ~-0.66, m_stag^2/site
+  doit augmenter avec L (vers m_stag^2_inf ~ 0.094). }
+LATTICE="square lattice"
+MODEL="spin"
+local_S=1/2
+L=16
+T=0.3
+J=1
+THERMALIZATION=3000
+SWEEPS=10000
+SEED=161616

@@ -1,0 +1,14 @@
+{ Heisenberg AFM S=1/2, reseau carre 2D 8x8, T=0.5
+  Modele de reference 2D : ordre AFM Neel a T=0 sur
+  reseau carre (Mermin-Wagner permet l ordre car la
+  symetrie SU(2) est brisee a T=0 seulement, ordre LRO
+  parametre par <m_stag^2>). }
+LATTICE="square lattice"
+MODEL="spin"
+local_S=1/2
+L=8
+T=0.5
+J=1
+THERMALIZATION=2000
+SWEEPS=10000
+SEED=99

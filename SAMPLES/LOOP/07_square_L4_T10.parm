@@ -1,0 +1,13 @@
+{ Heisenberg AFM S=1/2, reseau carre 2D 4x4, T=1.0
+  Petit systeme, energie comparable aux donnees exactes
+  par diagonalisation (Bonner-Fisher etendu).
+  Test rapide de coherence. }
+LATTICE="square lattice"
+MODEL="spin"
+local_S=1/2
+L=4
+T=1.0
+J=1
+THERMALIZATION=1000
+SWEEPS=5000
+SEED=271828

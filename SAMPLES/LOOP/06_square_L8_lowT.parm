@@ -1,0 +1,15 @@
+{ Heisenberg AFM S=1/2, reseau carre 2D 8x8, T=0.2
+  Plus basse temperature, plus proche du regime GS.
+  E/site attendu : ~ -0.66 (extrapole vers -0.6694 limite
+  thermodynamique GS, Sandvik QMC).
+  m_stag^2/site significatif (~0.4) refletant l ordre AFM
+  developpe (m_stag = 0.307 a L = infini selon Sandvik). }
+LATTICE="square lattice"
+MODEL="spin"
+local_S=1/2
+L=8
+T=0.2
+J=1
+THERMALIZATION=3000
+SWEEPS=15000
+SEED=314159

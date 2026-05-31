@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Format XML ALPS-compatible accepte par LOOP.exe.
+     Equivalent a 02_chain_L16_lowT.parm. -->
+<SIMULATION>
+  <PARAMETERS>
+    <PARAMETER name="LATTICE">chain lattice</PARAMETER>
+    <PARAMETER name="MODEL">spin</PARAMETER>
+    <PARAMETER name="local_S">1/2</PARAMETER>
+    <PARAMETER name="L">16</PARAMETER>
+    <PARAMETER name="T">0.1</PARAMETER>
+    <PARAMETER name="J">1</PARAMETER>
+    <PARAMETER name="THERMALIZATION">5000</PARAMETER>
+    <PARAMETER name="SWEEPS">20000</PARAMETER>
+    <PARAMETER name="SEED">7</PARAMETER>
+  </PARAMETERS>
+</SIMULATION>

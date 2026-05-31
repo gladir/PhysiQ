@@ -1,0 +1,13 @@
+{ Heisenberg AFM S=1/2, chaine 1D L=32, T=0.2
+  Plus grande chaine, T basse.
+  Susceptibilite staggered chi_s grande (correlations
+  quasi-LRO logarithmiques en 1D Heisenberg). }
+LATTICE="chain lattice"
+MODEL="spin"
+local_S=1/2
+L=32
+T=0.2
+J=1
+THERMALIZATION=5000
+SWEEPS=15000
+SEED=2026

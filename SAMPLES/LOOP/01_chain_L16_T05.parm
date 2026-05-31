@@ -1,0 +1,12 @@
+{ Heisenberg AFM S=1/2, chaine 1D L=16, T=0.5
+  E/site attendu : ~ -0.34 (regime intermediaire)
+  Limite GS Bethe : -ln(2) + 1/4 = -0.4431 }
+LATTICE="chain lattice"
+MODEL="spin"
+local_S=1/2
+L=16
+T=0.5
+J=1
+THERMALIZATION=2000
+SWEEPS=10000
+SEED=42
