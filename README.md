@@ -27,6 +27,10 @@ Voici la liste des différents fichiers proposés dans PhysiQ :
 		<td>Cette commande permet de lancer un clone pedagogique du simulateur Geant4.</td>
 	</tr>
 	<tr>
+		<td><b>LOOP.PAS</b></td>
+		<td>Cette commande permet d'exécute une simulation de Monte-Carlo quantique utilisant l'algorithme de boucle (Loop Algorithm) pour étudier le comportement de systèmes quantiques de spins et calculer diverses propriétés physiques telles que l'énergie, les corrélations magnétiques et la susceptibilité.</td>
+	</tr>
+	<tr>
 		<td><b>OCTOPUS.PAS</b></td>
 		<td>Cette commande permet de lancer l'analyseur d'entrée Octopus.</td>
 	</tr>
